@@ -235,12 +235,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-## 📧 Contact
-
-Your Name - [@yourtwitter](https://twitter.com/yourtwitter)
-
-Project Link: [https://github.com/yourusername/career-platform](https://github.com/yourusername/career-platform)
-
----
-
 

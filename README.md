@@ -243,10 +243,4 @@ Project Link: [https://github.com/yourusername/career-platform](https://github.c
 
 ---
 
-<div align="center">
 
-**Made with ❤️ for aspiring professionals**
-
-⭐ Star this repo if you found it helpful!
-
-</div>

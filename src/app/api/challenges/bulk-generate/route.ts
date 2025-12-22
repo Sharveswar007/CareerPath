@@ -310,7 +310,7 @@ export async function POST(request: NextRequest) {
             .select("title")
             .eq("user_id", user.id);
 
-        const existingTitles = new Set((existingChallenges || []).map(c => c.title));
+        const existingTitles = new Set((existingChallenges || []).map((c: any) => c.title));
 
         // Filter out challenges user already has
         const availableChallenges = CHALLENGE_LIBRARY.filter(
@@ -330,7 +330,7 @@ export async function POST(request: NextRequest) {
         const shuffled = availableChallenges.sort(() => Math.random() - 0.5);
         const selected = shuffled.slice(0, toGenerate);
 
-        const generatedChallenges = [];
+        const generatedChallenges: any[] = [];
 
         for (const challenge of selected) {
             const { data, error } = await supabase
@@ -344,7 +344,7 @@ export async function POST(request: NextRequest) {
                     starter_code: challenge.starter_code,
                     test_cases: challenge.test_cases,
                     is_recommended: true,
-                })
+                } as any)
                 .select()
                 .single();
 

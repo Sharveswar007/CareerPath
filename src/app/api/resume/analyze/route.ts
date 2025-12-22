@@ -38,8 +38,17 @@ export async function POST(req: Request) {
                     // @ts-ignore
                     const pdfjsLib = require("pdfjs-dist/legacy/build/pdf");
 
+                    // Configure worker for Node.js environment to avoid "fake worker" errors
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = "pdfjs-dist/legacy/build/pdf.worker.js";
+
                     const uint8Array = new Uint8Array(arrayBuffer);
-                    const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+                    // Disable worker to run in main thread if worker setup fails, or standard font loading
+                    const loadingTask = pdfjsLib.getDocument({
+                        data: uint8Array,
+                        disableFontFace: true,
+                        useSystemFonts: true,
+                        verbosity: 0
+                    });
                     const pdfDocument = await loadingTask.promise;
 
                     const numPages = pdfDocument.numPages;

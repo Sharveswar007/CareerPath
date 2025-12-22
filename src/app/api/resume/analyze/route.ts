@@ -3,6 +3,8 @@
 import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
 import { createClient } from "@/lib/supabase/server";
+// @ts-ignore
+import pdf from "pdf-parse";
 
 // Force Node.js runtime for proper file system and module support
 export const runtime = "nodejs";
@@ -33,36 +35,10 @@ export async function POST(req: Request) {
             if (file.type === "application/pdf") {
                 try {
                     const arrayBuffer = await file.arrayBuffer();
+                    const buffer = Buffer.from(arrayBuffer);
 
-                    // Use pdfjs-dist legacy build for Node.js support
-                    // @ts-ignore
-                    const pdfjsLib = require("pdfjs-dist/legacy/build/pdf");
-
-                    // Configure worker for Node.js environment to avoid "fake worker" errors
-                    pdfjsLib.GlobalWorkerOptions.workerSrc = "pdfjs-dist/legacy/build/pdf.worker.js";
-
-                    const uint8Array = new Uint8Array(arrayBuffer);
-                    // Disable worker to run in main thread if worker setup fails, or standard font loading
-                    const loadingTask = pdfjsLib.getDocument({
-                        data: uint8Array,
-                        disableFontFace: true,
-                        useSystemFonts: true,
-                        verbosity: 0
-                    });
-                    const pdfDocument = await loadingTask.promise;
-
-                    const numPages = pdfDocument.numPages;
-                    let extractedText = "";
-
-                    for (let i = 1; i <= numPages; i++) {
-                        const page = await pdfDocument.getPage(i);
-                        const textContent = await page.getTextContent();
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const pageText = textContent.items.map((item: any) => item.str).join(" ");
-                        extractedText += pageText + "\n";
-                    }
-
-                    resumeContent = extractedText;
+                    const data = await pdf(buffer);
+                    resumeContent = data.text;
                 } catch (pdfError: unknown) {
                     console.error("PDF Parsing Error:", pdfError);
                     return NextResponse.json(

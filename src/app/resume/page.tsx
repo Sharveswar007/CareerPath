@@ -32,6 +32,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { createClient } from "@/lib/supabase/client";
 
 const TARGET_ROLES = [
     "Software Engineer",
@@ -59,12 +60,17 @@ interface AnalysisResult {
     strengthKeywords: string[];
     formatIssues: string[];
     recommendations: string[];
+    _metadata?: {
+        fileName: string;
+        analyzedAt: string;
+    };
 }
 
 export default function ResumePage() {
     const [resumeText, setResumeText] = useState("");
     const [targetRole, setTargetRole] = useState("");
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
     const [file, setFile] = useState<File | null>(null);
@@ -74,16 +80,19 @@ export default function ResumePage() {
         if (uploadedFile) {
             setFile(uploadedFile);
             setUploadedFileName(uploadedFile.name);
-            // Only read as text if it's NOT a PDF (for preview)
-            if (uploadedFile.type !== "application/pdf") {
+            
+            // Only read as text if it's a text file (for preview)
+            if (uploadedFile.type === "text/plain") {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const text = e.target?.result as string;
                     setResumeText(text);
                 };
                 reader.readAsText(uploadedFile);
-            } else {
-                setResumeText("[PDF File Selected] Content will be analyzed by AI.");
+            } else if (uploadedFile.type === "application/pdf") {
+                setResumeText("[PDF File Selected] Text will be extracted automatically.");
+            } else if (uploadedFile.type.startsWith("image/")) {
+                setResumeText("[Image File Selected] Text will be extracted using OCR.");
             }
         }
     }, []);
@@ -93,8 +102,12 @@ export default function ResumePage() {
         accept: {
             "text/plain": [".txt"],
             "application/pdf": [".pdf"],
+            "image/png": [".png"],
+            "image/jpeg": [".jpg", ".jpeg"],
+            "image/webp": [".webp"],
         },
         maxFiles: 1,
+        maxSize: 10 * 1024 * 1024, // 10MB
     });
 
     const analyzeResume = async () => {
@@ -252,7 +265,7 @@ ${analysisResult.recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
                                         Drop your resume here or click to upload
                                     </p>
                                     <p className="text-sm text-muted-foreground">
-                                        Supports PDF and TXT files
+                                        Supports PDF, Images (PNG, JPG), and TXT files
                                     </p>
                                 </>
                             )}
@@ -465,10 +478,48 @@ ${analysisResult.recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
                             <Button
                                 variant="default"
                                 className="w-full bg-green-600 hover:bg-green-700 text-white mt-3"
-                                onClick={() => toast.success("Resume analysis saved to profile!")}
+                                disabled={isSaving}
+                                onClick={async () => {
+                                    if (!analysisResult) return;
+                                    setIsSaving(true);
+                                    try {
+                                        const supabase = createClient();
+                                        const { data: { user } } = await supabase.auth.getUser();
+                                        
+                                        if (!user) {
+                                            toast.error("Please sign in to save your analysis");
+                                            return;
+                                        }
+
+                                        const { error } = await supabase
+                                            .from("resume_analyses")
+                                            .insert({
+                                                user_id: user.id,
+                                                file_name: analysisResult._metadata?.fileName || uploadedFileName || "resume.txt",
+                                                analysis_result: analysisResult,
+                                                ats_score: analysisResult.atsScore || analysisResult.overallScore,
+                                                suggestions: {
+                                                    missingKeywords: analysisResult.missingKeywords,
+                                                    formatIssues: analysisResult.formatIssues,
+                                                    recommendations: analysisResult.recommendations,
+                                                },
+                                            });
+
+                                        if (error) throw error;
+                                        toast.success("Resume analysis saved to profile!");
+                                    } catch (err) {
+                                        console.error("Save error:", err);
+                                        toast.error("Failed to save. Please try again.");
+                                    } finally {
+                                        setIsSaving(false);
+                                    }
+                                }}
                             >
-                                <CheckCircle className="h-4 w-4 mr-2" />
-                                Save to Profile
+                                {isSaving ? (
+                                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
+                                ) : (
+                                    <><CheckCircle className="h-4 w-4 mr-2" />Save to Profile</>
+                                )}
                             </Button>
                         </motion.div>
                     )}

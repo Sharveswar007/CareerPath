@@ -1,69 +1,189 @@
 // Resume Analysis API - Analyzes resume with AI and saves to database
+// Supports: PDF (text & image-based), Images, and plain text files
+// Vercel-compatible: Uses unpdf for text PDFs, OCR.space for image-based PDFs/images
 
 import { NextResponse } from "next/server";
 import Groq from "groq-sdk";
-import { createClient } from "@/lib/supabase/server";
+import { extractText, getDocumentProxy } from "unpdf";
 
-// Force Node.js runtime for proper file system and module support
+// Use Node.js runtime for proper module support
 export const runtime = "nodejs";
+
+// Increase timeout for AI processing
+export const maxDuration = 60;
 
 // Initialize Groq client
 const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY,
 });
 
+// Helper: Extract text from PDF using unpdf (for text-based PDFs)
+async function extractTextFromPDF(uint8Array: Uint8Array): Promise<string> {
+    try {
+        const pdf = await getDocumentProxy(uint8Array);
+        const { text } = await extractText(pdf, { mergePages: true });
+        return text || '';
+    } catch (error) {
+        console.error("PDF parse error:", error);
+        throw error;
+    }
+}
+
+// Helper: Extract text from image-based PDF or image using OCR.space API
+async function extractTextWithOCR(file: File): Promise<string> {
+    const OCR_API_KEY = process.env.OCR_SPACE_API_KEY;
+    
+    if (!OCR_API_KEY) {
+        throw new Error("OCR service not configured. Please paste your resume text directly.");
+    }
+
+    try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("apikey", OCR_API_KEY);
+        formData.append("language", "eng");
+        formData.append("isOverlayRequired", "false");
+        formData.append("detectOrientation", "true");
+        formData.append("scale", "true");
+        formData.append("OCREngine", "2"); // More accurate engine
+        
+        // For PDFs, enable multi-page processing
+        if (file.type === "application/pdf") {
+            formData.append("isCreateSearchablePdf", "false");
+            formData.append("filetype", "PDF");
+        }
+
+        const response = await fetch("https://api.ocr.space/parse/image", {
+            method: "POST",
+            body: formData,
+        });
+
+        if (!response.ok) {
+            throw new Error(`OCR API error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        
+        if (result.IsErroredOnProcessing) {
+            throw new Error(result.ErrorMessage?.[0] || "OCR processing failed");
+        }
+
+        // Combine text from all pages
+        const extractedText = result.ParsedResults
+            ?.map((page: { ParsedText: string }) => page.ParsedText)
+            .join("\n\n") || "";
+
+        return extractedText;
+    } catch (error) {
+        console.error("OCR extraction error:", error);
+        throw error;
+    }
+}
+
 export async function POST(req: Request) {
     try {
-        // Get authenticated user
-        const supabase = await createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-
         // 1. Parse FormData
         const formData = await req.formData();
-        const file = formData.get("file") as File;
-        const text = formData.get("text") as string;
-        const targetRole = formData.get("targetRole") as string;
+        const file = formData.get("file") as File | null;
+        const text = formData.get("text") as string | null;
+        const targetRole = formData.get("targetRole") as string | null;
 
         let resumeContent = "";
         let fileName = "pasted_text.txt";
 
-        // 2. Extract Text (PDF or Raw Text)
+        // 2. Extract Text based on file type
         if (file) {
             fileName = file.name;
-            if (file.type === "application/pdf") {
+            const fileType = file.type;
+            const fileSize = file.size;
+
+            // Check file size (max 10MB)
+            if (fileSize > 10 * 1024 * 1024) {
+                return NextResponse.json(
+                    { error: "File too large. Maximum size is 10MB." },
+                    { status: 400 }
+                );
+            }
+
+            // Handle different file types
+            if (fileType === "application/pdf") {
+                // First try text extraction (for text-based PDFs)
                 try {
                     const arrayBuffer = await file.arrayBuffer();
-
-                    // Use pdfjs-dist legacy build for Node.js support
-                    // @ts-ignore
-                    const pdfjsLib = require("pdfjs-dist/legacy/build/pdf");
-
                     const uint8Array = new Uint8Array(arrayBuffer);
-                    const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
-                    const pdfDocument = await loadingTask.promise;
-
-                    const numPages = pdfDocument.numPages;
-                    let extractedText = "";
-
-                    for (let i = 1; i <= numPages; i++) {
-                        const page = await pdfDocument.getPage(i);
-                        const textContent = await page.getTextContent();
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const pageText = textContent.items.map((item: any) => item.str).join(" ");
-                        extractedText += pageText + "\n";
+                    resumeContent = await extractTextFromPDF(uint8Array);
+                    
+                    // If text extraction yields very little content, try OCR
+                    if (!resumeContent || resumeContent.trim().length < 100) {
+                        console.log("PDF has little text, trying OCR...");
+                        resumeContent = await extractTextWithOCR(file);
                     }
-
-                    resumeContent = extractedText;
                 } catch (pdfError: unknown) {
-                    console.error("PDF Parsing Error:", pdfError);
+                    console.log("Text extraction failed, trying OCR...", pdfError);
+                    // Fall back to OCR for image-based PDFs
+                    try {
+                        resumeContent = await extractTextWithOCR(file);
+                    } catch (ocrError: unknown) {
+                        console.error("OCR Extraction Error:", ocrError);
+                        return NextResponse.json(
+                            { 
+                                error: "Failed to process PDF file",
+                                details: ocrError instanceof Error ? ocrError.message : 'Unknown error',
+                                suggestion: "Try copying your resume text and pasting it directly."
+                            },
+                            { status: 400 }
+                        );
+                    }
+                }
+                
+                if (!resumeContent || resumeContent.trim().length < 50) {
                     return NextResponse.json(
-                        { error: `Failed to read PDF file: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}. Please try a text file.` },
+                        { 
+                            error: "Could not extract text from PDF",
+                            details: "The PDF might be corrupted or contain no readable text.",
+                            suggestion: "Try copying your resume text and pasting it directly."
+                        },
                         { status: 400 }
                     );
                 }
-            } else {
-                // Handle text/plain or other text formats
+            } else if (fileType.startsWith("image/")) {
+                // Use OCR for images
+                try {
+                    resumeContent = await extractTextWithOCR(file);
+                    
+                    if (!resumeContent || resumeContent.trim().length < 50) {
+                        return NextResponse.json(
+                            { 
+                                error: "Could not extract text from image",
+                                details: "The image might be too small, blurry, or not contain readable text.",
+                                suggestion: "Upload a clear, high-resolution image of your resume."
+                            },
+                            { status: 400 }
+                        );
+                    }
+                } catch (ocrError: unknown) {
+                    console.error("Image OCR Error:", ocrError);
+                    return NextResponse.json(
+                        { 
+                            error: "Failed to process image file",
+                            details: ocrError instanceof Error ? ocrError.message : 'Unknown error',
+                            suggestion: "Try a different image or paste the text directly."
+                        },
+                        { status: 400 }
+                    );
+                }
+            } else if (fileType === "text/plain" || fileType === "text/markdown" || fileType === "application/rtf") {
+                // Handle text files
                 resumeContent = await file.text();
+            } else {
+                return NextResponse.json(
+                    { 
+                        error: "Unsupported file type",
+                        details: `File type '${fileType}' is not supported.`,
+                        suggestion: "Please upload a PDF or text file, or paste your resume text directly."
+                    },
+                    { status: 400 }
+                );
             }
         } else if (text) {
             resumeContent = text;
@@ -194,36 +314,15 @@ Return JSON only:
             );
         }
 
-        // 5. Save to Database (if user is authenticated)
-        if (user) {
-            try {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const { error: insertError } = await (supabase as any)
-                    .from("resume_analyses")
-                    .insert({
-                        user_id: user.id,
-                        file_name: fileName,
-                        analysis_result: result,
-                        ats_score: result.atsScore || result.overallScore,
-                        suggestions: {
-                            missingKeywords: result.missingKeywords,
-                            formatIssues: result.formatIssues,
-                            recommendations: result.recommendations,
-                        },
-                    });
-
-                if (insertError) {
-                    console.error("Resume analysis save error:", insertError);
-                } else {
-                    console.log("Resume analysis saved to database for user:", user.id);
-                }
-            } catch (dbError) {
-                console.error("Database error:", dbError);
-                // Continue even if DB save fails - user still gets analysis
+        // 5. Return results (database save handled client-side for edge runtime)
+        // Include metadata for client-side saving
+        return NextResponse.json({
+            ...result,
+            _metadata: {
+                fileName,
+                analyzedAt: new Date().toISOString(),
             }
-        }
-
-        return NextResponse.json(result);
+        });
 
     } catch (error: unknown) {
         console.error("Critical Analysis Error:", error);

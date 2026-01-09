@@ -52,6 +52,20 @@ interface ProfileData {
     current_education: string | null;
     avatar_url: string | null;
     onboarding_complete: boolean;
+    // New fields
+    college: string | null;
+    personal_email: string | null;
+    date_of_birth: string | null;
+    father_name: string | null;
+    mother_name: string | null;
+    father_email: string | null;
+    mother_email: string | null;
+    father_phone: string | null;
+    mother_phone: string | null;
+    faculty_advisor_name: string | null;
+    faculty_advisor_email: string | null;
+    tenth_marks: string | null;
+    twelfth_marks: string | null;
 }
 
 interface AssessmentData {
@@ -151,6 +165,20 @@ export default function ProfilePage() {
         phone: "",
         location: "",
         current_education: "",
+        // New fields
+        college: "",
+        personal_email: "",
+        date_of_birth: "",
+        father_name: "",
+        mother_name: "",
+        father_email: "",
+        mother_email: "",
+        father_phone: "",
+        mother_phone: "",
+        faculty_advisor_name: "",
+        faculty_advisor_email: "",
+        tenth_marks: "",
+        twelfth_marks: "",
     });
 
     useEffect(() => {
@@ -213,6 +241,20 @@ export default function ProfilePage() {
                     phone: profileRes.data.phone || "",
                     location: profileRes.data.location || "",
                     current_education: profileRes.data.current_education || "",
+                    // New fields
+                    college: profileRes.data.college || "",
+                    personal_email: profileRes.data.personal_email || "",
+                    date_of_birth: profileRes.data.date_of_birth || "",
+                    father_name: profileRes.data.father_name || "",
+                    mother_name: profileRes.data.mother_name || "",
+                    father_email: profileRes.data.father_email || "",
+                    mother_email: profileRes.data.mother_email || "",
+                    father_phone: profileRes.data.father_phone || "",
+                    mother_phone: profileRes.data.mother_phone || "",
+                    faculty_advisor_name: profileRes.data.faculty_advisor_name || "",
+                    faculty_advisor_email: profileRes.data.faculty_advisor_email || "",
+                    tenth_marks: profileRes.data.tenth_marks || "",
+                    twelfth_marks: profileRes.data.twelfth_marks || "",
                 });
             }
 
@@ -245,6 +287,20 @@ export default function ProfilePage() {
                     phone: editForm.phone,
                     location: editForm.location,
                     current_education: editForm.current_education,
+                    // New fields
+                    college: editForm.college || null,
+                    personal_email: editForm.personal_email || null,
+                    date_of_birth: editForm.date_of_birth || null,
+                    father_name: editForm.father_name || null,
+                    mother_name: editForm.mother_name || null,
+                    father_email: editForm.father_email || null,
+                    mother_email: editForm.mother_email || null,
+                    father_phone: editForm.father_phone || null,
+                    mother_phone: editForm.mother_phone || null,
+                    faculty_advisor_name: editForm.faculty_advisor_name || null,
+                    faculty_advisor_email: editForm.faculty_advisor_email || null,
+                    tenth_marks: editForm.tenth_marks || null,
+                    twelfth_marks: editForm.twelfth_marks || null,
                     updated_at: new Date().toISOString(),
                 })
                 .eq("id", profile?.id);
@@ -440,7 +496,7 @@ export default function ProfilePage() {
                                 exit={{ scale: 0.9, opacity: 0 }}
                                 onClick={(e) => e.stopPropagation()}
                             >
-                                <Card className="p-6 w-full max-w-md">
+                                <Card className="p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto">
                                     <div className="flex items-center justify-between mb-6">
                                         <h2 className="text-xl font-bold">Edit Profile</h2>
                                         <Button
@@ -451,40 +507,188 @@ export default function ProfilePage() {
                                             <X className="h-4 w-4" />
                                         </Button>
                                     </div>
-                                    <div className="space-y-4">
+                                    <div className="space-y-6">
+                                        {/* Personal Information */}
                                         <div>
-                                            <label className="text-sm font-medium mb-1 block">Full Name</label>
-                                            <Input
-                                                value={editForm.full_name}
-                                                onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
-                                                placeholder="Your name"
-                                            />
+                                            <h3 className="text-sm font-semibold text-violet-600 mb-3 flex items-center gap-2">
+                                                <User className="h-4 w-4" />
+                                                Personal Information
+                                            </h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">Full Name <span className="text-red-500">*</span></label>
+                                                    <Input
+                                                        value={editForm.full_name}
+                                                        onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+                                                        placeholder="Your name"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">Date of Birth <span className="text-muted-foreground text-xs">(Optional)</span></label>
+                                                    <Input
+                                                        type="date"
+                                                        value={editForm.date_of_birth}
+                                                        onChange={(e) => setEditForm({ ...editForm, date_of_birth: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">Location <span className="text-muted-foreground text-xs">(Optional)</span></label>
+                                                    <Input
+                                                        value={editForm.location}
+                                                        onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                                                        placeholder="City, Country"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
+
+                                        {/* Contact Information */}
                                         <div>
-                                            <label className="text-sm font-medium mb-1 block">Phone</label>
-                                            <Input
-                                                value={editForm.phone}
-                                                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                                                placeholder="+91 XXXXX XXXXX"
-                                            />
+                                            <h3 className="text-sm font-semibold text-blue-600 mb-3 flex items-center gap-2">
+                                                <Phone className="h-4 w-4" />
+                                                Contact Information
+                                            </h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">Phone <span className="text-muted-foreground text-xs">(Optional)</span></label>
+                                                    <Input
+                                                        value={editForm.phone}
+                                                        onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                                                        placeholder="+91 XXXXX XXXXX"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">Personal Email <span className="text-muted-foreground text-xs">(Optional)</span></label>
+                                                    <Input
+                                                        type="email"
+                                                        value={editForm.personal_email}
+                                                        onChange={(e) => setEditForm({ ...editForm, personal_email: e.target.value })}
+                                                        placeholder="personal@email.com"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
+
+                                        {/* Academic Information */}
                                         <div>
-                                            <label className="text-sm font-medium mb-1 block">Location</label>
-                                            <Input
-                                                value={editForm.location}
-                                                onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
-                                                placeholder="City, Country"
-                                            />
+                                            <h3 className="text-sm font-semibold text-emerald-600 mb-3 flex items-center gap-2">
+                                                <GraduationCap className="h-4 w-4" />
+                                                Academic Information
+                                            </h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">Current Education <span className="text-muted-foreground text-xs">(Optional)</span></label>
+                                                    <Input
+                                                        value={editForm.current_education}
+                                                        onChange={(e) => setEditForm({ ...editForm, current_education: e.target.value })}
+                                                        placeholder="B.Tech CSE, 3rd Year"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">College/Institution <span className="text-muted-foreground text-xs">(Optional)</span></label>
+                                                    <Input
+                                                        value={editForm.college}
+                                                        onChange={(e) => setEditForm({ ...editForm, college: e.target.value })}
+                                                        placeholder="Your college name"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">10th Marks <span className="text-muted-foreground text-xs">(Optional)</span></label>
+                                                    <Input
+                                                        value={editForm.tenth_marks}
+                                                        onChange={(e) => setEditForm({ ...editForm, tenth_marks: e.target.value })}
+                                                        placeholder="e.g., 95% or 9.5 CGPA"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">12th Marks <span className="text-muted-foreground text-xs">(Optional)</span></label>
+                                                    <Input
+                                                        value={editForm.twelfth_marks}
+                                                        onChange={(e) => setEditForm({ ...editForm, twelfth_marks: e.target.value })}
+                                                        placeholder="e.g., 92% or 9.2 CGPA"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">Faculty Advisor Name <span className="text-muted-foreground text-xs">(Optional)</span></label>
+                                                    <Input
+                                                        value={editForm.faculty_advisor_name}
+                                                        onChange={(e) => setEditForm({ ...editForm, faculty_advisor_name: e.target.value })}
+                                                        placeholder="Advisor's name"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">FA Email <span className="text-muted-foreground text-xs">(Optional)</span></label>
+                                                    <Input
+                                                        type="email"
+                                                        value={editForm.faculty_advisor_email}
+                                                        onChange={(e) => setEditForm({ ...editForm, faculty_advisor_email: e.target.value })}
+                                                        placeholder="advisor@college.edu"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
+
+                                        {/* Family Information */}
                                         <div>
-                                            <label className="text-sm font-medium mb-1 block">Education</label>
-                                            <Input
-                                                value={editForm.current_education}
-                                                onChange={(e) => setEditForm({ ...editForm, current_education: e.target.value })}
-                                                placeholder="B.Tech CSE, 3rd Year"
-                                            />
+                                            <h3 className="text-sm font-semibold text-amber-600 mb-3">
+                                                👨‍👩‍👧 Family Information <span className="text-muted-foreground text-xs font-normal">(All Optional)</span>
+                                            </h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">Father's Name</label>
+                                                    <Input
+                                                        value={editForm.father_name}
+                                                        onChange={(e) => setEditForm({ ...editForm, father_name: e.target.value })}
+                                                        placeholder="Father's name"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">Mother's Name</label>
+                                                    <Input
+                                                        value={editForm.mother_name}
+                                                        onChange={(e) => setEditForm({ ...editForm, mother_name: e.target.value })}
+                                                        placeholder="Mother's name"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">Father's Email</label>
+                                                    <Input
+                                                        type="email"
+                                                        value={editForm.father_email}
+                                                        onChange={(e) => setEditForm({ ...editForm, father_email: e.target.value })}
+                                                        placeholder="father@email.com"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">Mother's Email</label>
+                                                    <Input
+                                                        type="email"
+                                                        value={editForm.mother_email}
+                                                        onChange={(e) => setEditForm({ ...editForm, mother_email: e.target.value })}
+                                                        placeholder="mother@email.com"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">Father's Phone</label>
+                                                    <Input
+                                                        value={editForm.father_phone}
+                                                        onChange={(e) => setEditForm({ ...editForm, father_phone: e.target.value })}
+                                                        placeholder="+91 XXXXX XXXXX"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-sm font-medium mb-1 block">Mother's Phone</label>
+                                                    <Input
+                                                        value={editForm.mother_phone}
+                                                        onChange={(e) => setEditForm({ ...editForm, mother_phone: e.target.value })}
+                                                        placeholder="+91 XXXXX XXXXX"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="flex gap-2 pt-4">
+
+                                        {/* Action Buttons */}
+                                        <div className="flex gap-2 pt-4 border-t">
                                             <Button
                                                 variant="outline"
                                                 className="flex-1"

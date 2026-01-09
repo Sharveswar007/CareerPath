@@ -13,7 +13,21 @@ create table public.profiles (
   location text,
   current_education text,
   onboarding_complete boolean default false,
-  updated_at timestamp with time zone
+  updated_at timestamp with time zone,
+  -- New profile fields
+  college text,
+  personal_email text,
+  date_of_birth date,
+  father_name text,
+  mother_name text,
+  father_email text,
+  mother_email text,
+  father_phone text,
+  mother_phone text,
+  faculty_advisor_name text,
+  faculty_advisor_email text,
+  tenth_marks text,
+  twelfth_marks text
 );
 
 -- Turn on Security

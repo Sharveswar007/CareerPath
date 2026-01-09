@@ -23,6 +23,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+// Test result interface for detailed verification
+interface TestResult {
+    test: number;
+    input: string;
+    expected: string;
+    actual: string;
+    passed: boolean;
+    error?: string;
+}
 
 // Mock Data (In a real app, fetch from DB/API)
 // For AI Generated challenges, we would fetch from `coding_challenges` table by ID.
@@ -109,6 +118,7 @@ export default function ChallengeDetailPage() {
     const [feedback, setFeedback] = useState<string>("");
     const [consoleOutput, setConsoleOutput] = useState<string>("");
     const [hasError, setHasError] = useState(false);
+    const [testResults, setTestResults] = useState<TestResult[]>([]); // NEW: Store test results
     const supabase = createClient();
 
     // Run code - real execution using Piston API
@@ -162,7 +172,7 @@ export default function ChallengeDetailPage() {
         }
     };
 
-    // Submit code - execute, verify with AI, then save
+    // Submit code - run test cases and verify
     const handleSubmit = async () => {
         if (!code.trim()) {
             toast.error("Please write some code first!");
@@ -177,6 +187,8 @@ export default function ChallengeDetailPage() {
         setActiveTab("console");
         setConsoleOutput("");
         setHasError(false);
+        setTestResults([]);
+        setFeedback("");
 
         try {
             // Check if user is logged in
@@ -187,67 +199,60 @@ export default function ChallengeDetailPage() {
                 return;
             }
 
-            // Step 1: Execute the code using real compiler
-            toast.info("Running your code...");
+            // Get test cases from challenge data
+            const testCases = challengeData.fullData?.test_cases || [];
 
-            const runResponse = await fetch("/api/challenges/run", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    code: code,
-                    language: detectedLang, // Use detected language
-                }),
-            });
-
-            const runResult = await runResponse.json();
-
-            // Show execution result
-            if (runResult.success) {
-                setConsoleOutput(runResult.output || "(No output)");
-                setHasError(false);
-            } else {
-                // If execution failed, don't proceed with verification
-                setConsoleOutput(runResult.error || "Unknown error occurred");
-                setHasError(true);
-                setFeedback("Execution failed - fix errors first");
-                toast.error("❌ Execution failed. Fix errors and try again.");
+            if (testCases.length === 0) {
+                toast.error("No test cases available for this challenge");
                 setIsRunning(false);
                 return;
             }
 
-            // Step 2: Use AI to verify if the solution is correct
-            toast.info("Verifying your solution with AI...");
+            toast.info(`Running ${testCases.length} test cases...`);
 
+            // Verify code against test cases
             const verifyResponse = await fetch("/api/challenges/verify", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     code: code,
-                    language: language,
-                    challenge: {
-                        title: challengeData.title,
-                        description: challengeData.description,
-                    },
-                    output: runResult.output, // Send actual output for verification
+                    language: detectedLang,
+                    test_cases: testCases,
+                    challenge_title: challengeData.title,
                 }),
             });
 
             const verifyResult = await verifyResponse.json();
             const isCorrect = verifyResult.passed === true;
 
-            // Update feedback with AI verification result
-            setFeedback(verifyResult.feedback || (isCorrect ? "✅ Solution verified correct!" : "❌ Solution needs improvement"));
+            // Update test results and feedback
+            setTestResults(verifyResult.results || []);
+            setFeedback(verifyResult.feedback || "");
+            setHasError(!isCorrect);
+
+            // Build console output from test results
+            let output = `Test Results: ${verifyResult.passed_count || 0}/${verifyResult.total || 0} passed\n\n`;
+            (verifyResult.results || []).forEach((r: TestResult) => {
+                output += `${r.passed ? "✅" : "❌"} Test ${r.test}: `;
+                if (r.passed) {
+                    output += "Passed\n";
+                } else {
+                    output += `Failed\n   Input: ${r.input}\n   Expected: ${r.expected}\n   Got: ${r.actual || r.error}\n`;
+                }
+            });
+            setConsoleOutput(output);
 
             if (isCorrect) {
-                // Only save submission if correct
+                // Only save submission if all tests pass
                 const { error: dbError } = await supabase
                     .from("coding_submissions")
                     .insert({
                         user_id: user.id,
                         challenge_id: challengeData.id,
                         code: code,
-                        language: language,
+                        language: detectedLang,
                         status: "passed",
+                        test_results: verifyResult.results,
                     });
 
                 if (dbError) {
@@ -257,7 +262,7 @@ export default function ChallengeDetailPage() {
                     return;
                 }
 
-                toast.success("🎉 Correct! Solution verified and saved.");
+                toast.success(`🎉 All ${verifyResult.total} test cases passed!`);
                 setShowAnalysis(true);
 
                 // Generate replacement challenge in background
@@ -267,7 +272,7 @@ export default function ChallengeDetailPage() {
                     body: JSON.stringify({ career: "Software Engineer", count: 1 }),
                 }).catch(() => { });
             } else {
-                toast.error("❌ Not correct. " + (verifyResult.feedback || "Check the AI feedback and try again."));
+                toast.error(`❌ ${verifyResult.passed_count || 0}/${verifyResult.total || 0} test cases passed`);
             }
 
         } catch (error) {

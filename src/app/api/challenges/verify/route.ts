@@ -1,41 +1,55 @@
-// Challenge Code Verification API - AI-based verification
+// Challenge Code Verification API - Test Case Based Verification
+// Runs actual test cases instead of AI guessing
 
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { executeCode } from "@/lib/piston/client";
 
 export const runtime = "nodejs";
 
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY!,
-});
+interface TestCase {
+    input: string;
+    expected: string;
+}
+
+interface TestResult {
+    test: number;
+    input: string;
+    expected: string;
+    actual: string;
+    passed: boolean;
+    error?: string;
+}
 
 interface VerifyRequest {
     code: string;
     language: string;
-    challenge: {
-        title: string;
-        description: string;
-    };
-    output?: string; // Actual execution output
+    test_cases: TestCase[];
+    challenge_title?: string;
 }
 
 export async function POST(request: NextRequest) {
     try {
         const body: VerifyRequest = await request.json();
-        const { code, language, challenge, output } = body;
+        const { code, language, test_cases, challenge_title } = body;
 
         // Validate input
         if (!code || code.trim().length === 0) {
             return NextResponse.json({
                 passed: false,
+                total: 0,
+                passed_count: 0,
+                results: [],
                 feedback: "No code provided. Please write your solution first.",
             });
         }
 
-        if (!challenge?.title) {
+        if (!test_cases || test_cases.length === 0) {
             return NextResponse.json({
                 passed: false,
-                feedback: "Challenge data missing.",
+                total: 0,
+                passed_count: 0,
+                results: [],
+                feedback: "No test cases available for this challenge.",
             });
         }
 
@@ -44,138 +58,109 @@ export async function POST(request: NextRequest) {
         const hasPlaceholder =
             codeStr.includes('todo') ||
             codeStr.includes('your code here') ||
-            codeStr.includes('implement') ||
             codeStr.includes('write your') ||
-            codeStr.includes('// code') ||
-            codeStr.includes('pass') && codeStr.includes('def '); // Python placeholder
+            (codeStr.includes('pass') && codeStr.includes('def ') && !codeStr.includes('passed'));
 
-        // Check if code is too short (likely just starter code)
-        const codeWithoutComments = code.replace(/\/\/.*|\/\*[\s\S]*?\*\/|#.*/g, '').trim();
-        const significantCode = codeWithoutComments.replace(/\s+/g, '');
-
-        if (significantCode.length < 20 || hasPlaceholder) {
+        if (hasPlaceholder) {
             return NextResponse.json({
                 passed: false,
+                total: test_cases.length,
+                passed_count: 0,
+                results: [],
                 feedback: "Code appears incomplete. Please implement the solution first.",
             });
         }
 
-        // Build prompt with or without actual output
-        const outputSection = output
-            ? `\nACTUAL OUTPUT FROM EXECUTION:\n\`\`\`\n${output}\n\`\`\`\n`
-            : "";
+        // Run each test case
+        const results: TestResult[] = [];
+        let passedCount = 0;
 
-        const prompt = `You are a fair code evaluator for a coding challenge platform.
+        for (let i = 0; i < test_cases.length; i++) {
+            const testCase = test_cases[i];
+            const testInput = testCase.input || "";
+            const expectedOutput = (testCase.expected || "").trim();
 
-PROBLEM: "${challenge.title}"
-${challenge.description}
+            try {
+                // Execute code with test input
+                const execResult = await executeCode(code, language, testInput);
 
-USER'S ${language.toUpperCase()} CODE:
-\`\`\`${language}
-${code}
-\`\`\`
-${outputSection}
-EVALUATION CRITERIA:
-1. Does the code attempt to solve the stated problem?
-2. ${output ? "Does the actual output look reasonable for the problem?" : "Would the code logic produce correct results?"}
-3. Is the core algorithm/approach correct for solving this problem?
-
-IMPORTANT:
-- Focus on whether the solution WORKS, not coding style
-- If the code runs without errors and the approach is reasonable, lean towards passing
-- Only fail if there are CLEAR logical errors that would cause wrong results
-- Minor optimizations are NOT required for passing
-
-Return this JSON:
-{
-  "passed": true or false,
-  "feedback": "Brief, encouraging feedback"
-}
-
-ONLY return valid JSON.`;
-
-        const completion = await groq.chat.completions.create({
-            model: "llama-3.1-8b-instant",
-            messages: [
-                {
-                    role: "system",
-                    content: "You are a helpful code evaluator. Be fair and encouraging. If the code demonstrates understanding of the problem and the approach is correct, pass it. Only fail for clear bugs that would cause incorrect results. Return only valid JSON.",
-                },
-                {
-                    role: "user",
-                    content: prompt,
-                },
-            ],
-            temperature: 0.0, // Zero temperature for deterministic evaluation
-            max_tokens: 1500, // Increased to prevent JSON truncation
-        });
-
-        const content = completion.choices[0]?.message?.content || "{}";
-
-        // Clean and parse the response
-        let cleanContent = content
-            .replace(/```json\n?|\n?```/g, "")
-            .replace(/```\n?|\n?```/g, "")
-            .trim();
-
-        // Better JSON extraction - find matching braces
-        const extractJSON = (str: string): string => {
-            const start = str.indexOf('{');
-            if (start === -1) return "{}";
-
-            let braceCount = 0;
-            let end = start;
-
-            for (let i = start; i < str.length; i++) {
-                if (str[i] === '{') braceCount++;
-                if (str[i] === '}') braceCount--;
-                if (braceCount === 0) {
-                    end = i;
-                    break;
+                if (!execResult.success) {
+                    // Execution error (compile error, runtime error)
+                    results.push({
+                        test: i + 1,
+                        input: testInput.substring(0, 50) + (testInput.length > 50 ? "..." : ""),
+                        expected: expectedOutput.substring(0, 50) + (expectedOutput.length > 50 ? "..." : ""),
+                        actual: "",
+                        passed: false,
+                        error: execResult.error || "Execution failed",
+                    });
+                    continue;
                 }
+
+                // Compare output (trim whitespace for comparison)
+                const actualOutput = (execResult.output || "").trim();
+                const passed = actualOutput === expectedOutput;
+
+                if (passed) {
+                    passedCount++;
+                }
+
+                results.push({
+                    test: i + 1,
+                    input: testInput.substring(0, 50) + (testInput.length > 50 ? "..." : ""),
+                    expected: expectedOutput.substring(0, 50) + (expectedOutput.length > 50 ? "..." : ""),
+                    actual: actualOutput.substring(0, 50) + (actualOutput.length > 50 ? "..." : ""),
+                    passed,
+                    error: passed ? undefined : "Wrong answer",
+                });
+
+            } catch (err: any) {
+                results.push({
+                    test: i + 1,
+                    input: testInput.substring(0, 50),
+                    expected: expectedOutput.substring(0, 50),
+                    actual: "",
+                    passed: false,
+                    error: err.message || "Test execution failed",
+                });
             }
-
-            return str.substring(start, end + 1);
-        };
-
-        cleanContent = extractJSON(cleanContent);
-
-        let result;
-        try {
-            result = JSON.parse(cleanContent);
-        } catch (parseError) {
-            console.error("JSON parse error:", parseError);
-            console.error("Raw AI response:", content.substring(0, 300));
-
-            // Return a default response - assume pass if code ran
-            return NextResponse.json({
-                passed: true,
-                feedback: "Code executed. Unable to get detailed analysis.",
-            });
         }
 
-        // Return simplified response
+        const allPassed = passedCount === test_cases.length;
+
+        // Generate feedback
+        let feedback: string;
+        if (allPassed) {
+            feedback = `✅ All ${test_cases.length} test cases passed! Great job!`;
+        } else if (passedCount === 0) {
+            const firstError = results.find(r => r.error);
+            if (firstError?.error?.includes("Execution failed") || firstError?.error?.includes("Compilation")) {
+                feedback = `❌ Code has errors. ${firstError.error}`;
+            } else {
+                feedback = `❌ 0/${test_cases.length} test cases passed. Check your logic.`;
+            }
+        } else {
+            const failedTest = results.find(r => !r.passed);
+            feedback = `⚠️ ${passedCount}/${test_cases.length} test cases passed. Test ${failedTest?.test} failed: expected "${failedTest?.expected}", got "${failedTest?.actual}"`;
+        }
+
         return NextResponse.json({
-            passed: result.passed === true,
-            feedback: result.feedback || (result.passed ? "Code looks correct!" : "Code needs improvement."),
+            passed: allPassed,
+            total: test_cases.length,
+            passed_count: passedCount,
+            results,
+            feedback,
         });
 
     } catch (error: any) {
         console.error("Verification Error:", error);
 
-        // Check for rate limit
-        if (error?.status === 429) {
-            return NextResponse.json({
-                passed: false,
-                results: [],
-                feedback: "Rate limit reached. Please wait a moment and try again.",
-            });
-        }
-
         return NextResponse.json({
             passed: false,
+            total: 0,
+            passed_count: 0,
             results: [],
-            feedback: "Error evaluating code: " + (error.message || "Unknown error"),
+            feedback: "Error verifying code: " + (error.message || "Unknown error"),
         });
     }
 }

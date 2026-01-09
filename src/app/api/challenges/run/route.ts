@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { code, language } = body;
+        const { code, language, stdin } = body; // Added stdin support
 
         // Validate input
         if (!code || code.trim().length === 0) {
@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // Execute the code using Piston API
-        const result = await executeCode(code, language);
+        // Execute the code using Piston API with optional stdin
+        const result = await executeCode(code, language, stdin || "");
 
         return NextResponse.json({
             success: result.success,

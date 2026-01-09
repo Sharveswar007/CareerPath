@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, Mail, Github, Chrome } from "lucide-react";
+import { Loader2, Mail } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function LoginPage() {
@@ -65,19 +65,7 @@ export default function LoginPage() {
         }
     };
 
-    const handleOAuth = async (provider: "google" | "github") => {
-        try {
-            const { error } = await supabase.auth.signInWithOAuth({
-                provider,
-                options: {
-                    redirectTo: `${location.origin}/auth/callback`,
-                },
-            });
-            if (error) throw error;
-        } catch (error: any) {
-            toast.error(error.message || "OAuth failed");
-        }
-    };
+
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -148,35 +136,6 @@ export default function LoginPage() {
                         </Button>
                     </form>
 
-                    <div className="relative my-6">
-                        <div className="absolute inset-0 flex items-center">
-                            <span className="w-full border-t" />
-                        </div>
-                        <div className="relative flex justify-center text-xs uppercase">
-                            <span className="bg-card px-2 text-muted-foreground">
-                                Or continue with
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <Button
-                            variant="outline"
-                            onClick={() => handleOAuth("google")}
-                            className="hover:bg-muted/50"
-                        >
-                            <Chrome className="mr-2 h-4 w-4" />
-                            Google
-                        </Button>
-                        <Button
-                            variant="outline"
-                            onClick={() => handleOAuth("github")}
-                            className="hover:bg-muted/50"
-                        >
-                            <Github className="mr-2 h-4 w-4" />
-                            GitHub
-                        </Button>
-                    </div>
 
                     <div className="mt-6 text-center text-sm">
                         <span className="text-muted-foreground">

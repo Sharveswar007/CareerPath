@@ -32,7 +32,8 @@ const LANGUAGE_CONFIG: Record<string, { language: string; version: string; fileN
 // Execute code using Piston API with timeout
 export async function executeCode(
     code: string,
-    language: string
+    language: string,
+    stdin: string = "" // NEW: Accept input for test cases
 ): Promise<ExecutionResult> {
     const langKey = language.toLowerCase();
     const config = LANGUAGE_CONFIG[langKey];
@@ -66,7 +67,7 @@ export async function executeCode(
                         content: code,
                     },
                 ],
-                stdin: "",
+                stdin: stdin, // Pass the input to the code
                 args: [],
                 compile_timeout: 10000,
                 run_timeout: 5000,

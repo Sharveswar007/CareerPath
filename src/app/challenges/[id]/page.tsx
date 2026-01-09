@@ -15,6 +15,7 @@ import {
     Terminal,
     Maximize2,
     Minimize2,
+    Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { executeCode, SUPPORTED_LANGUAGES, isBrowserLanguage, normalizeLanguage } from "@/lib/execution";
 
 // Test result interface for detailed verification
 interface TestResult {
@@ -48,7 +50,15 @@ export default function ChallengeDetailPage() {
     const [challengeData, setChallengeData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
-    // Auto-detect language from code
+    // Supported languages for the platform
+    const supportedLanguages = [
+        { id: "javascript", label: "JavaScript", icon: "JS" },
+        { id: "python", label: "Python", icon: "PY" },
+        { id: "java", label: "Java", icon: "JV" },
+        { id: "cpp", label: "C++", icon: "C++" },
+    ];
+
+    // Detect language from code (limited to supported languages)
     const detectLanguage = (codeStr: string): string => {
         const code = codeStr.trim();
 
@@ -63,14 +73,6 @@ export default function ChallengeDetailPage() {
         // C++ patterns
         if (/#include\s*</.test(code) || /std::/.test(code) || /cout\s*<</.test(code)) {
             return "cpp";
-        }
-        // C patterns
-        if (/#include\s*<stdio\.h>/.test(code) || /printf\s*\(/.test(code)) {
-            return "c";
-        }
-        // TypeScript patterns
-        if (/:\s*(string|number|boolean|void)\s*[=;)]/.test(code) || /interface\s+\w+\s*\{/.test(code)) {
-            return "typescript";
         }
         // Default to JavaScript
         return "javascript";
@@ -121,16 +123,15 @@ export default function ChallengeDetailPage() {
     const [testResults, setTestResults] = useState<TestResult[]>([]); // NEW: Store test results
     const supabase = createClient();
 
-    // Run code - real execution using Piston API
+    // Run code using hybrid executor
     const handleRun = async () => {
         if (!code.trim()) {
             toast.error("Please write some code first!");
             return;
         }
 
-        // Auto-detect language from code
-        const detectedLang = detectLanguage(code);
-        setLanguage(detectedLang);
+        const runLang = normalizeLanguage(language);
+        const isBrowser = isBrowserLanguage(runLang);
 
         setIsRunning(true);
         setActiveTab("console");
@@ -139,21 +140,20 @@ export default function ChallengeDetailPage() {
         setFeedback("");
 
         try {
-            const response = await fetch("/api/challenges/run", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    code: code,
-                    language: detectedLang, // Use detected language
-                }),
-            });
+            if (isBrowser) {
+                toast.info(`Running ${runLang} in browser...`);
+            } else {
+                toast.info(`Running ${runLang} on server...`);
+            }
 
-            const result = await response.json();
+            // Use unified executor
+            const result = await executeCode(code, runLang, "");
 
             if (result.success) {
                 setConsoleOutput(result.output || "(No output)");
                 setHasError(false);
-                setFeedback(`Executed with ${result.language} v${result.version}`);
+                const location = isBrowser ? "browser" : "server";
+                setFeedback(`Executed ${result.language} in ${location}${result.executionTime ? ` (${Math.round(result.executionTime)}ms)` : ""}`);
                 toast.success("✅ Code executed successfully!");
             } else {
                 setConsoleOutput(result.error || "Unknown error occurred");
@@ -162,9 +162,9 @@ export default function ChallengeDetailPage() {
                 toast.error("❌ Error in code. Check output below.");
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Run error:", error);
-            setConsoleOutput("Failed to connect to code execution service");
+            setConsoleOutput(error.message || "Failed to execute code");
             setHasError(true);
             toast.error("Failed to run code. Please try again.");
         } finally {
@@ -172,16 +172,15 @@ export default function ChallengeDetailPage() {
         }
     };
 
-    // Submit code - run test cases and verify
+    // Submit code - run test cases using hybrid executor
     const handleSubmit = async () => {
         if (!code.trim()) {
             toast.error("Please write some code first!");
             return;
         }
 
-        // Auto-detect language from code
-        const detectedLang = detectLanguage(code);
-        setLanguage(detectedLang);
+        const submitLang = normalizeLanguage(language);
+        const isBrowser = isBrowserLanguage(submitLang);
 
         setIsRunning(true);
         setActiveTab("console");
@@ -208,31 +207,82 @@ export default function ChallengeDetailPage() {
                 return;
             }
 
-            toast.info(`Running ${testCases.length} test cases...`);
+            const location = isBrowser ? "browser" : "server";
+            toast.info(`Running ${testCases.length} tests in ${location}...`);
 
-            // Verify code against test cases
-            const verifyResponse = await fetch("/api/challenges/verify", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    code: code,
-                    language: detectedLang,
-                    test_cases: testCases,
-                    challenge_title: challengeData.title,
-                }),
-            });
+            // Run test cases using hybrid executor
+            const results: TestResult[] = [];
+            let passedCount = 0;
 
-            const verifyResult = await verifyResponse.json();
-            const isCorrect = verifyResult.passed === true;
+            for (let i = 0; i < testCases.length; i++) {
+                const testCase = testCases[i];
+                const testInput = String(testCase.input || "");
+                const expectedOutput = String(testCase.expected || "").trim();
+
+                try {
+                    // Add delay between tests for server execution
+                    if (!isBrowser && i > 0) {
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                    }
+
+                    const execResult = await executeCode(code, submitLang, testInput);
+
+                    if (!execResult.success) {
+                        results.push({
+                            test: i + 1,
+                            input: testInput.substring(0, 50),
+                            expected: expectedOutput.substring(0, 50),
+                            actual: "",
+                            passed: false,
+                            error: execResult.error || "Execution failed",
+                        });
+                        continue;
+                    }
+
+                    const actualOutput = (execResult.output || "").trim();
+                    const passed = actualOutput === expectedOutput ||
+                        actualOutput.toLowerCase() === expectedOutput.toLowerCase() ||
+                        (parseFloat(actualOutput) === parseFloat(expectedOutput) && !isNaN(parseFloat(actualOutput)));
+
+                    if (passed) passedCount++;
+
+                    results.push({
+                        test: i + 1,
+                        input: testInput.substring(0, 50),
+                        expected: expectedOutput.substring(0, 50),
+                        actual: actualOutput.substring(0, 50),
+                        passed,
+                        error: passed ? undefined : "Wrong answer",
+                    });
+                } catch (err: any) {
+                    results.push({
+                        test: i + 1,
+                        input: testInput.substring(0, 50),
+                        expected: expectedOutput.substring(0, 50),
+                        actual: "",
+                        passed: false,
+                        error: err.message || "Test failed",
+                    });
+                }
+            }
+
+            const allPassed = passedCount === testCases.length;
 
             // Update test results and feedback
-            setTestResults(verifyResult.results || []);
-            setFeedback(verifyResult.feedback || "");
-            setHasError(!isCorrect);
+            setTestResults(results);
+            setHasError(!allPassed);
+
+            // Generate feedback
+            if (allPassed) {
+                setFeedback(`✅ All ${testCases.length} test cases passed!`);
+            } else {
+                const failedTest = results.find(r => !r.passed);
+                setFeedback(`❌ ${passedCount}/${testCases.length} passed. Test ${failedTest?.test}: expected "${failedTest?.expected}", got "${failedTest?.actual || failedTest?.error}"`);
+            }
 
             // Build console output from test results
-            let output = `Test Results: ${verifyResult.passed_count || 0}/${verifyResult.total || 0} passed\n\n`;
-            (verifyResult.results || []).forEach((r: TestResult) => {
+            let output = `Test Results: ${passedCount}/${testCases.length} passed\n\n`;
+            results.forEach((r: TestResult) => {
                 output += `${r.passed ? "✅" : "❌"} Test ${r.test}: `;
                 if (r.passed) {
                     output += "Passed\n";
@@ -242,7 +292,7 @@ export default function ChallengeDetailPage() {
             });
             setConsoleOutput(output);
 
-            if (isCorrect) {
+            if (allPassed) {
                 // Only save submission if all tests pass
                 const { error: dbError } = await supabase
                     .from("coding_submissions")
@@ -250,9 +300,9 @@ export default function ChallengeDetailPage() {
                         user_id: user.id,
                         challenge_id: challengeData.id,
                         code: code,
-                        language: detectedLang,
+                        language: submitLang,
                         status: "passed",
-                        test_results: verifyResult.results,
+                        test_results: results,
                     });
 
                 if (dbError) {
@@ -262,7 +312,7 @@ export default function ChallengeDetailPage() {
                     return;
                 }
 
-                toast.success(`🎉 All ${verifyResult.total} test cases passed!`);
+                toast.success(`🎉 All ${testCases.length} test cases passed!`);
                 setShowAnalysis(true);
 
                 // Generate replacement challenge in background
@@ -272,7 +322,7 @@ export default function ChallengeDetailPage() {
                     body: JSON.stringify({ career: "Software Engineer", count: 1 }),
                 }).catch(() => { });
             } else {
-                toast.error(`❌ ${verifyResult.passed_count || 0}/${verifyResult.total || 0} test cases passed`);
+                toast.error(`❌ ${passedCount}/${testCases.length} test cases passed`);
             }
 
         } catch (error) {
@@ -319,10 +369,27 @@ export default function ChallengeDetailPage() {
                                 {challengeData.difficulty}
                             </Badge>
                         </h1>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Zap className="h-3 w-3" />
+                            JS/Python: browser • Java/C++: server
+                        </p>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {/* Language Selector */}
+                    <select
+                        value={language}
+                        onChange={(e) => setLanguage(e.target.value)}
+                        className="h-9 px-3 rounded-md border bg-background text-sm font-medium"
+                        disabled={isRunning}
+                    >
+                        {supportedLanguages.map(lang => (
+                            <option key={lang.id} value={lang.id}>
+                                {lang.label}
+                            </option>
+                        ))}
+                    </select>
 
                     <Button
                         variant="secondary"

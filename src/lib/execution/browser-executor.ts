@@ -1,5 +1,5 @@
 // Browser-based code execution for JavaScript and Python
-// Runs each test case by calling user's function with parsed input
+// Detects and calls ANY user-defined function with test input
 
 export interface ExecutionResult {
     success: boolean;
@@ -9,14 +9,14 @@ export interface ExecutionResult {
     executionTime?: number;
 }
 
-// Execute JavaScript by calling user's function with test input
+// Execute JavaScript by detecting and calling user's function
 export function executeJavaScript(code: string, testInput: string = ""): ExecutionResult {
     const startTime = performance.now();
     let output = "";
     let error: string | null = null;
 
     try {
-        // Parse the test input as JSON (e.g., "[1,2,3,4,5]" -> [1,2,3,4,5])
+        // Parse the test input as JSON
         let parsedInput: any;
         try {
             parsedInput = JSON.parse(testInput.trim());
@@ -24,42 +24,36 @@ export function executeJavaScript(code: string, testInput: string = ""): Executi
             parsedInput = testInput.trim();
         }
 
-        // Create isolated scope
         const logs: string[] = [];
         const mockConsole = {
             log: (...args: any[]) => {
-                const formatted = args.map(a =>
+                logs.push(args.map(a =>
                     typeof a === 'object' ? JSON.stringify(a) : String(a)
-                ).join(" ");
-                logs.push(formatted);
+                ).join(" "));
             },
         };
 
-        // Wrap user code to define function and return result
+        // Wrap code to find and call ANY defined function
         const wrappedCode = `
             (function() {
                 const console = arguments[0];
                 const _testInput = arguments[1];
                 
-                // User's code (defines functions)
+                // Track functions before and after user code
+                const _beforeFuncs = Object.keys(this).filter(k => typeof this[k] === 'function');
+                
+                // User's code
                 ${code}
                 
-                // Find the main function
-                const _funcNames = [
-                    'solve', 'solution', 'main', 
-                    'sumArrayElements', 'sum_array_elements',
-                    'twoSum', 'two_sum',
-                    'maxProfit', 'max_profit',
-                    'longestSubstring', 'longest_substring',
-                    'isPalindrome', 'is_palindrome',
-                    'reverseString', 'reverse_string',
-                    'findMax', 'find_max',
-                    'fibonacci', 'factorial'
-                ];
+                // Find newly defined functions
+                const _afterFuncs = Object.getOwnPropertyNames(arguments.callee.caller || {});
                 
-                for (const name of _funcNames) {
+                // Try to find the user's function by pattern matching in code
+                const funcMatch = \`${code.replace(/`/g, '\\`')}\`.match(/function\\s+(\\w+)|const\\s+(\\w+)\\s*=|let\\s+(\\w+)\\s*=|var\\s+(\\w+)\\s*=/);
+                if (funcMatch) {
+                    const funcName = funcMatch[1] || funcMatch[2] || funcMatch[3] || funcMatch[4];
                     try {
-                        const fn = eval(name);
+                        const fn = eval(funcName);
                         if (typeof fn === 'function') {
                             const result = fn(_testInput);
                             return result;
@@ -67,7 +61,6 @@ export function executeJavaScript(code: string, testInput: string = ""): Executi
                     } catch(e) {}
                 }
                 
-                // If no function found, return any console.log output
                 return undefined;
             })
         `;
@@ -75,12 +68,10 @@ export function executeJavaScript(code: string, testInput: string = ""): Executi
         const fn = eval(wrappedCode);
         const result = fn(mockConsole, parsedInput);
 
-        // If function returned a value, use that
         if (result !== undefined) {
             output = typeof result === 'object' ? JSON.stringify(result) : String(result);
         } else if (logs.length > 0) {
-            // Otherwise use console output
-            output = logs[logs.length - 1]; // Use last log as result
+            output = logs[logs.length - 1];
         }
 
     } catch (e: any) {
@@ -100,7 +91,6 @@ export function executeJavaScript(code: string, testInput: string = ""): Executi
 let pyodideInstance: any = null;
 let pyodideLoading: Promise<any> | null = null;
 
-// Load Pyodide
 async function loadPyodide(): Promise<any> {
     if (pyodideInstance) return pyodideInstance;
     if (pyodideLoading) return pyodideLoading;
@@ -126,7 +116,7 @@ async function loadPyodide(): Promise<any> {
     return pyodideLoading;
 }
 
-// Execute Python by calling user's function with test input
+// Execute Python by detecting and calling ANY user-defined function
 export async function executePython(code: string, testInput: string = ""): Promise<ExecutionResult> {
     const startTime = performance.now();
     let output = "";
@@ -134,17 +124,13 @@ export async function executePython(code: string, testInput: string = ""): Promi
 
     try {
         const pyodide = await loadPyodide();
-
-        // Escape the test input for Python string
         const escapedInput = testInput.trim().replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
-        // Complete Python execution code
         const fullCode = `
 import sys
 import json
 from io import StringIO
 
-# Capture stdout
 sys.stdout = StringIO()
 sys.stderr = StringIO()
 
@@ -155,60 +141,51 @@ try:
 except:
     _test_input = _test_input_raw
 
-# ============ USER CODE START ============
-${code}
-# ============ USER CODE END ============
+# Get all names before user code
+_before_names = set(dir())
 
-# Find and call the main function
-_possible_funcs = [
-    'solve', 'solution', 'main',
-    'sum_array_elements', 'sumArrayElements',
-    'two_sum', 'twoSum',
-    'max_profit', 'maxProfit',
-    'longest_substring', 'longestSubstring',
-    'is_palindrome', 'isPalindrome',
-    'reverse_string', 'reverseString',
-    'find_max', 'findMax',
-    'fibonacci', 'factorial'
-]
+# ============ USER CODE ============
+${code}
+# ===================================
+
+# Find new function defined by user
+_after_names = set(dir())
+_new_names = _after_names - _before_names
+_user_funcs = [n for n in _new_names if callable(eval(n)) and not n.startswith('_')]
 
 _result = None
 _found = False
 
-for _fname in _possible_funcs:
-    if _fname in dir() and callable(eval(_fname)):
+# Call the first user-defined function
+for _fname in _user_funcs:
+    try:
         _func = eval(_fname)
-        try:
-            _result = _func(_test_input)
-            _found = True
-            break
-        except TypeError as e:
-            # Try unpacking if input is a list
-            if isinstance(_test_input, (list, tuple)):
-                try:
-                    _result = _func(*_test_input)
-                    _found = True
-                    break
-                except:
-                    pass
+        _result = _func(_test_input)
+        _found = True
+        break
+    except TypeError:
+        if isinstance(_test_input, (list, tuple)):
+            try:
+                _result = _func(*_test_input)
+                _found = True
+                break
+            except:
+                pass
+    except:
+        pass
 
-# Get the output
 _stdout = sys.stdout.getvalue().strip()
 
-# Result is: function return value, or stdout if no return
 if _found and _result is not None:
-    _final_output = str(_result)
+    _final = str(_result)
 elif _stdout:
-    # Get last line of stdout (the actual result)
-    _final_output = _stdout.split('\\n')[-1]
+    _final = _stdout.split('\\n')[-1]
 else:
-    _final_output = ""
+    _final = ""
 
-# Reset stdout for next run
 sys.stdout = StringIO()
 sys.stderr = StringIO()
-
-_final_output
+_final
 `;
 
         output = pyodide.runPython(fullCode);

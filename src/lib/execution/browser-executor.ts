@@ -1,5 +1,5 @@
 // Browser-based code execution for JavaScript and Python
-// No server calls needed - runs entirely in the browser
+// Runs each test case by calling user's function with parsed input
 
 export interface ExecutionResult {
     success: boolean;
@@ -9,103 +9,90 @@ export interface ExecutionResult {
     executionTime?: number;
 }
 
-// Execute JavaScript in a sandboxed environment
-export function executeJavaScript(code: string, stdin: string = ""): ExecutionResult {
+// Execute JavaScript by calling user's function with test input
+export function executeJavaScript(code: string, testInput: string = ""): ExecutionResult {
     const startTime = performance.now();
     let output = "";
     let error: string | null = null;
 
     try {
-        // Create a sandboxed console
-        const logs: string[] = [];
-        const mockConsole = {
-            log: (...args: any[]) => logs.push(args.map(a =>
-                typeof a === 'object' ? JSON.stringify(a) : String(a)
-            ).join(" ")),
-            error: (...args: any[]) => logs.push("ERROR: " + args.map(a => String(a)).join(" ")),
-            warn: (...args: any[]) => logs.push("WARN: " + args.map(a => String(a)).join(" ")),
-        };
-
-        // Parse stdin as input - try to parse as JSON array/value
-        let parsedInput: any = stdin.trim();
+        // Parse the test input as JSON (e.g., "[1,2,3,4,5]" -> [1,2,3,4,5])
+        let parsedInput: any;
         try {
-            parsedInput = JSON.parse(stdin.trim());
+            parsedInput = JSON.parse(testInput.trim());
         } catch {
-            // Keep as string if not valid JSON
+            parsedInput = testInput.trim();
         }
 
-        // Create wrapper that auto-calls the main function
+        // Create isolated scope
+        const logs: string[] = [];
+        const mockConsole = {
+            log: (...args: any[]) => {
+                const formatted = args.map(a =>
+                    typeof a === 'object' ? JSON.stringify(a) : String(a)
+                ).join(" ");
+                logs.push(formatted);
+            },
+        };
+
+        // Wrap user code to define function and return result
         const wrappedCode = `
-            "use strict";
-            const console = this.console;
-            const input = this.input;
-            const parsedInput = this.parsedInput;
-            const parseInt = this.parseInt;
-            const parseFloat = this.parseFloat;
-            const JSON = this.JSON;
-            const Math = this.Math;
-            const Array = this.Array;
-            const Object = this.Object;
-            const String = this.String;
-            const Number = this.Number;
-            const Boolean = this.Boolean;
-            const Map = this.Map;
-            const Set = this.Set;
-            
-            // User code
-            ${code}
-            
-            // Auto-detect and call the main function
-            const funcNames = ['solve', 'solution', 'main', 'sum_array_elements', 'twoSum', 'maxProfit'];
-            for (const name of funcNames) {
-                if (typeof this[name] === 'function' || typeof eval('typeof ' + name) !== 'undefined') {
+            (function() {
+                const console = arguments[0];
+                const _testInput = arguments[1];
+                
+                // User's code (defines functions)
+                ${code}
+                
+                // Find the main function
+                const _funcNames = [
+                    'solve', 'solution', 'main', 
+                    'sumArrayElements', 'sum_array_elements',
+                    'twoSum', 'two_sum',
+                    'maxProfit', 'max_profit',
+                    'longestSubstring', 'longest_substring',
+                    'isPalindrome', 'is_palindrome',
+                    'reverseString', 'reverse_string',
+                    'findMax', 'find_max',
+                    'fibonacci', 'factorial'
+                ];
+                
+                for (const name of _funcNames) {
                     try {
                         const fn = eval(name);
                         if (typeof fn === 'function') {
-                            const result = fn(parsedInput);
-                            if (result !== undefined) {
-                                console.log(typeof result === 'object' ? JSON.stringify(result) : result);
-                            }
-                            break;
+                            const result = fn(_testInput);
+                            return result;
                         }
                     } catch(e) {}
                 }
-            }
+                
+                // If no function found, return any console.log output
+                return undefined;
+            })
         `;
 
-        const sandboxedFn = new Function(wrappedCode);
+        const fn = eval(wrappedCode);
+        const result = fn(mockConsole, parsedInput);
 
-        sandboxedFn.call({
-            console: mockConsole,
-            input: stdin.trim(),
-            parsedInput,
-            parseInt,
-            parseFloat,
-            JSON,
-            Math,
-            Array,
-            Object,
-            String,
-            Number,
-            Boolean,
-            Map,
-            Set,
-        });
-
-        output = logs.join("\n");
+        // If function returned a value, use that
+        if (result !== undefined) {
+            output = typeof result === 'object' ? JSON.stringify(result) : String(result);
+        } else if (logs.length > 0) {
+            // Otherwise use console output
+            output = logs[logs.length - 1]; // Use last log as result
+        }
 
     } catch (e: any) {
         error = e.message || "JavaScript execution error";
     }
-
-    const executionTime = performance.now() - startTime;
 
     return {
         success: !error,
         output: error ? "" : output,
         error,
         language: "javascript",
-        executionTime,
+        executionTime: performance.now() - startTime,
     };
 }
 
@@ -113,14 +100,12 @@ export function executeJavaScript(code: string, stdin: string = ""): ExecutionRe
 let pyodideInstance: any = null;
 let pyodideLoading: Promise<any> | null = null;
 
-// Load Pyodide (lazy load on first Python execution)
+// Load Pyodide
 async function loadPyodide(): Promise<any> {
     if (pyodideInstance) return pyodideInstance;
-
     if (pyodideLoading) return pyodideLoading;
 
     pyodideLoading = (async () => {
-        // Load Pyodide from CDN
         const script = document.createElement("script");
         script.src = "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js";
 
@@ -130,8 +115,7 @@ async function loadPyodide(): Promise<any> {
             document.head.appendChild(script);
         });
 
-        // Initialize Pyodide
-        // @ts-ignore - Pyodide is loaded globally
+        // @ts-ignore
         pyodideInstance = await window.loadPyodide({
             indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/",
         });
@@ -142,8 +126,8 @@ async function loadPyodide(): Promise<any> {
     return pyodideLoading;
 }
 
-// Execute Python using Pyodide
-export async function executePython(code: string, stdin: string = ""): Promise<ExecutionResult> {
+// Execute Python by calling user's function with test input
+export async function executePython(code: string, testInput: string = ""): Promise<ExecutionResult> {
     const startTime = performance.now();
     let output = "";
     let error: string | null = null;
@@ -151,50 +135,42 @@ export async function executePython(code: string, stdin: string = ""): Promise<E
     try {
         const pyodide = await loadPyodide();
 
-        // Reset stdout/stderr and set up test input
-        const setupCode = `
+        // Escape the test input for Python string
+        const escapedInput = testInput.trim().replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+        // Complete Python execution code
+        const fullCode = `
 import sys
-from io import StringIO
 import json
+from io import StringIO
 
 # Capture stdout
 sys.stdout = StringIO()
 sys.stderr = StringIO()
 
-# Store the test input
-_test_input_raw = '''${stdin.trim().replace(/'/g, "\\'")}'''
-
-# Try to parse as JSON
+# Parse test input
+_test_input_raw = '${escapedInput}'
 try:
     _test_input = json.loads(_test_input_raw)
 except:
     _test_input = _test_input_raw
 
-# Mock input function for stdin-style input
-_input_lines = _test_input_raw.split('\\n')
-_input_index = 0
+# ============ USER CODE START ============
+${code}
+# ============ USER CODE END ============
 
-def input(prompt=""):
-    global _input_index
-    if _input_index < len(_input_lines):
-        result = _input_lines[_input_index]
-        _input_index += 1
-        return result
-    return ""
-
-__builtins__.input = input
-`;
-
-        pyodide.runPython(setupCode);
-
-        // Run user code
-        pyodide.runPython(code);
-
-        // Auto-detect and call the main function with test input
-        const callFunctionCode = `
-# Try to find and call the main function
-_possible_funcs = ['solve', 'solution', 'main', 'sum_array_elements', 'twoSum', 'maxProfit', 
-                   'two_sum', 'max_profit', 'longestSubstring', 'longest_substring']
+# Find and call the main function
+_possible_funcs = [
+    'solve', 'solution', 'main',
+    'sum_array_elements', 'sumArrayElements',
+    'two_sum', 'twoSum',
+    'max_profit', 'maxProfit',
+    'longest_substring', 'longestSubstring',
+    'is_palindrome', 'isPalindrome',
+    'reverse_string', 'reverseString',
+    'find_max', 'findMax',
+    'fibonacci', 'factorial'
+]
 
 _result = None
 _found = False
@@ -206,9 +182,9 @@ for _fname in _possible_funcs:
             _result = _func(_test_input)
             _found = True
             break
-        except TypeError:
-            # Function might need different args, try as individual elements
-            if isinstance(_test_input, (list, tuple)) and len(_test_input) > 0:
+        except TypeError as e:
+            # Try unpacking if input is a list
+            if isinstance(_test_input, (list, tuple)):
                 try:
                     _result = _func(*_test_input)
                     _found = True
@@ -216,66 +192,47 @@ for _fname in _possible_funcs:
                 except:
                     pass
 
-# Print result if we found and called a function
+# Get the output
+_stdout = sys.stdout.getvalue().strip()
+
+# Result is: function return value, or stdout if no return
 if _found and _result is not None:
-    # Only print if nothing was printed yet
-    _current_output = sys.stdout.getvalue()
-    if not _current_output.strip():
-        print(_result)
-`;
+    _final_output = str(_result)
+elif _stdout:
+    # Get last line of stdout (the actual result)
+    _final_output = _stdout.split('\\n')[-1]
+else:
+    _final_output = ""
 
-        pyodide.runPython(callFunctionCode);
-
-        // Get output
-        output = pyodide.runPython(`
-stdout_val = sys.stdout.getvalue()
-stderr_val = sys.stderr.getvalue()
-# Reset for next run
+# Reset stdout for next run
 sys.stdout = StringIO()
 sys.stderr = StringIO()
-stdout_val + stderr_val
-        `);
 
-        // If output has multiple lines, try to get just the last meaningful value
-        const lines = output.trim().split('\n');
-        if (lines.length > 1) {
-            // Filter out debug prints that contain "Input:", "Expected:", "Got:"
-            const cleanLines = lines.filter(line =>
-                !line.includes('Input:') &&
-                !line.includes('Expected:') &&
-                !line.includes('Got:') &&
-                !line.includes('Test ')
-            );
-            if (cleanLines.length > 0) {
-                output = cleanLines[cleanLines.length - 1];
-            }
-        }
+_final_output
+`;
+
+        output = pyodide.runPython(fullCode);
 
     } catch (e: any) {
         error = e.message || "Python execution error";
-        // Clean up error message
         if (error && error.includes("PythonError:")) {
             error = error.split("PythonError:")[1]?.trim() || error;
         }
     }
 
-    const executionTime = performance.now() - startTime;
-
     return {
         success: !error,
-        output: error ? "" : output.trim(),
+        output: error ? "" : String(output).trim(),
         error,
         language: "python",
-        executionTime,
+        executionTime: performance.now() - startTime,
     };
 }
 
-// Check if Pyodide is loaded
 export function isPyodideLoaded(): boolean {
     return pyodideInstance !== null;
 }
 
-// Preload Pyodide (call on page load for faster first execution)
 export function preloadPyodide(): void {
     loadPyodide().catch(console.error);
 }

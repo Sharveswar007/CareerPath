@@ -36,6 +36,8 @@ export async function executeCode(
 ): Promise<ExecutionResult> {
     const normalizedLang = normalizeLanguage(language);
 
+    console.log(`[Executor] Running ${normalizedLang}, input: "${stdin.substring(0, 50)}"`);
+
     if (!isLanguageSupported(normalizedLang)) {
         return {
             success: false,
@@ -45,27 +47,35 @@ export async function executeCode(
         };
     }
 
+    let result: ExecutionResult;
+
     // Route to appropriate executor
     switch (normalizedLang) {
         case "javascript":
-            return executeJavaScript(code, stdin);
+            result = executeJavaScript(code, stdin);
+            break;
 
         case "python":
-            return await executePython(code, stdin);
+            result = await executePython(code, stdin);
+            break;
 
         case "java":
         case "cpp":
             // Use Piston API for Java/C++
-            return await executePiston(code, normalizedLang, stdin);
+            result = await executePiston(code, normalizedLang, stdin);
+            break;
 
         default:
-            return {
+            result = {
                 success: false,
                 output: "",
                 error: `Unsupported language: ${language}`,
                 language: normalizedLang,
             };
     }
+
+    console.log(`[Executor] Result: success=${result.success}, output="${result.output}", error="${result.error}"`);
+    return result;
 }
 
 // Piston API execution for Java and C++

@@ -179,7 +179,7 @@ stdout_val + stderr_val
     } catch (e: any) {
         error = e.message || "Python execution error";
         // Clean up error message
-        if (error.includes("PythonError:")) {
+        if (error && error.includes("PythonError:")) {
             error = error.split("PythonError:")[1]?.trim() || error;
         }
     }

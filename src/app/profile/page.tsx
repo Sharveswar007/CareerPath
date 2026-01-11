@@ -32,6 +32,7 @@ import {
     Sparkles,
     Brain,
     Rocket,
+    Camera,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -159,6 +160,7 @@ export default function ProfilePage() {
     const [chatSessions, setChatSessions] = useState(0);
     const [latestAtsScore, setLatestAtsScore] = useState<number | null>(null);
     const [totalAssessments, setTotalAssessments] = useState(0);
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
     const [editForm, setEditForm] = useState({
         full_name: "",
@@ -329,6 +331,57 @@ export default function ProfilePage() {
         router.push("/login");
     };
 
+    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !profile?.id) return;
+
+        // Validate file
+        if (!file.type.startsWith("image/")) {
+            toast.error("Please select an image file");
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error("Image must be less than 5MB");
+            return;
+        }
+
+        setUploadingAvatar(true);
+        try {
+            // Create unique file name
+            const fileExt = file.name.split(".").pop();
+            const fileName = `${profile.id}-${Date.now()}.${fileExt}`;
+
+            // Upload to Supabase Storage
+            const { error: uploadError } = await supabase.storage
+                .from("avatars")
+                .upload(fileName, file, { upsert: true });
+
+            if (uploadError) throw uploadError;
+
+            // Get public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from("avatars")
+                .getPublicUrl(fileName);
+
+            // Update profile with new avatar URL
+            const { error: updateError } = await supabase
+                .from("profiles")
+                .update({ avatar_url: publicUrl })
+                .eq("id", profile.id);
+
+            if (updateError) throw updateError;
+
+            // Update local state
+            setProfile(prev => prev ? { ...prev, avatar_url: publicUrl } : null);
+            toast.success("Profile photo updated!");
+        } catch (error: any) {
+            console.error("Avatar upload error:", error);
+            toast.error(error.message || "Failed to upload photo");
+        } finally {
+            setUploadingAvatar(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 via-background to-indigo-50 dark:from-violet-950/20 dark:via-background dark:to-indigo-950/20">
@@ -400,23 +453,42 @@ export default function ProfilePage() {
                         </div>
 
                         <div className="relative flex flex-col md:flex-row items-start md:items-center gap-6">
-                            {/* Avatar */}
+                            {/* Avatar with Upload */}
                             <motion.div
-                                className="relative"
+                                className="relative group"
                                 whileHover={{ scale: 1.05 }}
                                 transition={{ type: "spring", stiffness: 300 }}
                             >
-                                <div className="h-24 w-24 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/30 shadow-xl">
+                                <div className="h-24 w-24 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/30 shadow-xl overflow-hidden">
                                     {profile?.avatar_url ? (
                                         <img
                                             src={profile.avatar_url}
                                             alt="Avatar"
-                                            className="h-20 w-20 rounded-xl object-cover"
+                                            className="h-full w-full object-cover"
                                         />
                                     ) : (
                                         <User className="h-10 w-10 text-white" />
                                     )}
                                 </div>
+
+                                {/* Upload Button Overlay */}
+                                <label
+                                    className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                >
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleAvatarUpload}
+                                        className="hidden"
+                                        disabled={uploadingAvatar}
+                                    />
+                                    {uploadingAvatar ? (
+                                        <Loader2 className="h-6 w-6 text-white animate-spin" />
+                                    ) : (
+                                        <Camera className="h-6 w-6 text-white" />
+                                    )}
+                                </label>
+
                                 {profile?.onboarding_complete && (
                                     <div className="absolute -bottom-2 -right-2 h-8 w-8 bg-green-500 rounded-full flex items-center justify-center border-2 border-white shadow-lg">
                                         <Check className="h-4 w-4 text-white" />

@@ -95,6 +95,12 @@ Requirements:
 - Mix of conceptual, practical, and scenario-based questions
 - 40% easy, 40% medium, 20% hard difficulty
 
+CRITICAL: "correctAnswer" MUST be 0-BASED INDEX:
+- 0 = First option (Option A)
+- 1 = Second option (Option B)  
+- 2 = Third option (Option C)
+- 3 = Fourth option (Option D)
+
 Return a JSON array:
 [
     {
@@ -183,6 +189,12 @@ Requirements:
 - Include code output questions if technical role
 - Mix of numerical, logical, and analytical questions
 
+CRITICAL: "correctAnswer" MUST be 0-BASED INDEX:
+- 0 = First option (Option A)
+- 1 = Second option (Option B)  
+- 2 = Third option (Option C)
+- 3 = Fourth option (Option D)
+
 Return a JSON array:
 [
     {
@@ -248,6 +260,12 @@ Requirements:
 - Scenarios should be realistic for Indian tech companies
 - Include dilemmas with no obvious right answer
 - Test judgment, not technical knowledge
+
+CRITICAL: "correctAnswer" MUST be 0-BASED INDEX:
+- 0 = First option (Response A)
+- 1 = Second option (Response B)  
+- 2 = Third option (Response C)
+- 3 = Fourth option (Response D)
 
 Return a JSON array:
 [

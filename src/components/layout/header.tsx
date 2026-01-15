@@ -21,6 +21,7 @@ import {
     Home,
     User,
     Target,
+    Rocket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -32,6 +33,7 @@ const navItems = [
     { href: "/trends", label: "Career Trends", icon: TrendingUp },
     { href: "/challenges", label: "Challenges", icon: Code2 },
     { href: "/resume", label: "Resume", icon: FileText },
+    { href: "/dashboard", label: "Dashboard", icon: Rocket },
     { href: "/chat", label: "AI Chat", icon: MessageSquare },
 ];
 

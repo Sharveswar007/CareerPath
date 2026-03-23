@@ -1,8 +1,8 @@
 // Challenge Code Verification API - Test Case Based Verification
-// Runs actual test cases with robust comparison
+// Runs actual test cases with robust comparison using Piston API backend
 
 import { NextRequest, NextResponse } from "next/server";
-import { executeCode } from "@/lib/piston/client";
+import { executeCodeViaBackend } from "@/lib/backends/execution-service";
 
 export const runtime = "nodejs";
 
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
                 }
 
                 // Execute code with test input
-                const execResult = await executeCode(code, language, testInput);
+                const execResult = await executeCodeViaBackend(code, language, testInput);
 
                 if (!execResult.success) {
                     // Check if it's a rate limit error

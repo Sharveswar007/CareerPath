@@ -1,7 +1,7 @@
-// Piston API Client for Real Code Execution
-// Optimized version with hardcoded versions to skip runtime fetch
+// Wandbox API Client for Real Code Execution
+// Supports 50+ languages via wandbox.org (Free, no auth required)
 
-const PISTON_API = "https://emkc.org/api/v2/piston";
+const WANDBOX_API = "https://wandbox.org/api/compile.json";
 
 interface ExecutionResult {
     success: boolean;
@@ -11,29 +11,29 @@ interface ExecutionResult {
     version: string;
 }
 
-// Hardcoded language configurations to avoid runtime fetch timeout
-const LANGUAGE_CONFIG: Record<string, { language: string; version: string; fileName: string }> = {
-    javascript: { language: "javascript", version: "18.15.0", fileName: "script.js" },
-    js: { language: "javascript", version: "18.15.0", fileName: "script.js" },
-    python: { language: "python", version: "3.10.0", fileName: "main.py" },
-    py: { language: "python", version: "3.10.0", fileName: "main.py" },
-    java: { language: "java", version: "15.0.2", fileName: "Main.java" },
-    cpp: { language: "c++", version: "10.2.0", fileName: "main.cpp" },
-    "c++": { language: "c++", version: "10.2.0", fileName: "main.cpp" },
-    c: { language: "c", version: "10.2.0", fileName: "main.c" },
-    typescript: { language: "typescript", version: "5.0.3", fileName: "script.ts" },
-    ts: { language: "typescript", version: "5.0.3", fileName: "script.ts" },
-    ruby: { language: "ruby", version: "3.0.1", fileName: "main.rb" },
-    go: { language: "go", version: "1.16.2", fileName: "main.go" },
-    rust: { language: "rust", version: "1.68.2", fileName: "main.rs" },
-    php: { language: "php", version: "8.2.3", fileName: "main.php" },
+// Wandbox compiler identifiers
+const LANGUAGE_CONFIG: Record<string, { compiler: string; version: string }> = {
+    javascript: { compiler: "node-head", version: "Node.js" },
+    js: { compiler: "node-head", version: "Node.js" },
+    python: { compiler: "python3", version: "Python 3" },
+    py: { compiler: "python3", version: "Python 3" },
+    java: { compiler: "java-openjdk-head", version: "OpenJDK" },
+    cpp: { compiler: "gcc-head", version: "GCC C++" },
+    "c++": { compiler: "gcc-head", version: "GCC C++" },
+    c: { compiler: "gcc-head-c", version: "GCC C" },
+    typescript: { compiler: "node-typescript-head", version: "TypeScript" },
+    ts: { compiler: "node-typescript-head", version: "TypeScript" },
+    ruby: { compiler: "ruby-head", version: "Ruby" },
+    go: { compiler: "go-head", version: "Go" },
+    rust: { compiler: "rust-head", version: "Rust" },
+    php: { compiler: "php-head", version: "PHP" },
 };
 
-// Execute code using Piston API with timeout
+// Execute code using Wandbox API with timeout
 export async function executeCode(
     code: string,
     language: string,
-    stdin: string = "" // NEW: Accept input for test cases
+    stdin: string = ""
 ): Promise<ExecutionResult> {
     const langKey = language.toLowerCase();
     const config = LANGUAGE_CONFIG[langKey];
@@ -49,96 +49,118 @@ export async function executeCode(
     }
 
     try {
-        // Create abort controller for timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-        const response = await fetch(`${PISTON_API}/execute`, {
+        // Wandbox API expects: compiler, code, stdin, options, save
+        const requestBody = {
+            compiler: config.compiler,
+            code: code,
+            stdin: stdin || "",
+            options: "",
+            save: false,
+        };
+
+        console.log("[Wandbox] Sending request to:", WANDBOX_API, {
+            compiler: config.compiler,
+            codeLength: code.length,
+            stdinLength: stdin?.length || 0,
+        });
+
+        const response = await fetch(WANDBOX_API, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
+                "Accept": "application/json",
             },
-            body: JSON.stringify({
-                language: config.language,
-                version: config.version,
-                files: [
-                    {
-                        name: config.fileName,
-                        content: code,
-                    },
-                ],
-                stdin: stdin, // Pass the input to the code
-                args: [],
-                compile_timeout: 10000,
-                run_timeout: 5000,
-            }),
+            body: JSON.stringify(requestBody),
             signal: controller.signal,
         });
 
         clearTimeout(timeoutId);
+        const responseText = await response.text();
+
+        console.log("[Wandbox] Response status:", response.status);
+        console.log("[Wandbox] Response preview:", responseText.substring(0, 200));
 
         if (!response.ok) {
-            const errorText = await response.text();
+            console.error("[Wandbox] Error response:", responseText);
             return {
                 success: false,
                 output: "",
-                error: `Server error: ${response.status}`,
-                language: config.language,
+                error: `Wandbox error (${response.status}): ${response.statusText}`,
+                language: config.compiler,
                 version: config.version,
             };
         }
 
-        const result = await response.json();
-
-        // Check for compile errors
-        if (result.compile && result.compile.code !== 0) {
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (e) {
+            console.error("[Wandbox] Failed to parse JSON:", responseText);
             return {
                 success: false,
                 output: "",
-                error: result.compile.stderr || result.compile.output || "Compilation error",
-                language: config.language,
+                error: "Invalid JSON response from Wandbox",
+                language: config.compiler,
+                version: config.version,
+            };
+        }
+
+        console.log("[Wandbox] Parsed result keys:", Object.keys(result));
+
+        // Check for compilation errors
+        if (result.compiler_error && result.compiler_error.length > 0) {
+            return {
+                success: false,
+                output: "",
+                error: result.compiler_error,
+                language: config.compiler,
                 version: config.version,
             };
         }
 
         // Check for runtime errors
-        if (result.run && result.run.code !== 0) {
+        if (result.program_error && result.program_error.length > 0) {
             return {
                 success: false,
-                output: result.run.stdout || "",
-                error: result.run.stderr || "Runtime error",
-                language: config.language,
+                output: result.program_output || "",
+                error: result.program_error,
+                language: config.compiler,
                 version: config.version,
             };
         }
 
-        // Success
+        // Success - return program output
+        const output = (result.program_output || "").trim();
+        console.log("[Wandbox] Success output:", output);
+
         return {
             success: true,
-            output: result.run?.stdout || result.run?.output || "",
-            error: result.run?.stderr || null,
-            language: config.language,
+            output: output,
+            error: null,
+            language: config.compiler,
             version: config.version,
         };
     } catch (error: unknown) {
-        // Handle timeout
-        if (error instanceof Error && error.name === 'AbortError') {
+        if (error instanceof Error && error.name === "AbortError") {
             return {
                 success: false,
                 output: "",
-                error: "Execution timed out. Please try again.",
-                language: config.language,
-                version: config.version,
+                error: "Execution timed out (15s limit)",
+                language: langKey,
+                version: "unknown",
             };
         }
 
-        console.error("Execution error:", error);
+        console.error("[Wandbox] Execution error:", error);
         return {
             success: false,
             output: "",
-            error: "Failed to connect to code execution service. Please try again.",
-            language: config.language,
-            version: config.version,
+            error: error instanceof Error ? error.message : "Failed to execute code",
+            language: langKey,
+            version: "unknown",
         };
     }
 }

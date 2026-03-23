@@ -1,6 +1,6 @@
 // Real Code Execution API - Uses Piston for actual compilation
 import { NextRequest, NextResponse } from "next/server";
-import { executeCode } from "@/lib/piston/client";
+import { executeCodeViaBackend } from "@/lib/backends/execution-service";
 
 export const runtime = "nodejs";
 
@@ -26,15 +26,14 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // Execute the code using Piston API with optional stdin
-        const result = await executeCode(code, language, stdin || "");
+        // Execute the code using backend Piston service with optional stdin
+        const result = await executeCodeViaBackend(code, language, stdin || "");
 
         return NextResponse.json({
             success: result.success,
             output: result.output,
             error: result.error,
             language: result.language,
-            version: result.version,
         });
     } catch (error: unknown) {
         console.error("Run Error:", error);

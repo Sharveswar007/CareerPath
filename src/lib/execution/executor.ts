@@ -1,4 +1,4 @@
-// Unified Code Executor - All languages via Piston API
+// Unified Code Executor - All languages via Wandbox API
 // Simpler and more reliable than browser-based execution
 
 export interface ExecutionResult {
@@ -28,20 +28,20 @@ export function isLanguageSupported(lang: string): lang is SupportedLanguage {
     return SUPPORTED_LANGUAGES.includes(normalized);
 }
 
-// For compatibility - all use Piston now
+// For compatibility - all use Wandbox now
 export function isBrowserLanguage(lang: string): boolean {
-    return false; // All use Piston API now
+    return false; // All use Wandbox API now
 }
 
-// Language configuration for Piston API
-const PISTON_CONFIG: Record<string, { language: string; version: string; fileName: string }> = {
-    javascript: { language: "javascript", version: "18.15.0", fileName: "main.js" },
-    python: { language: "python", version: "3.10.0", fileName: "main.py" },
-    java: { language: "java", version: "15.0.2", fileName: "Main.java" },
-    cpp: { language: "c++", version: "10.2.0", fileName: "main.cpp" },
+// Language configuration for Wandbox API
+const WANDBOX_CONFIG: Record<string, { compiler: string }> = {
+    javascript: { compiler: "node-head" },
+    python: { compiler: "python3" },
+    java: { compiler: "java-openjdk-head" },
+    cpp: { compiler: "gcc-head" },
 };
 
-// Execute code using Piston API
+// Execute code using Wandbox API
 export async function executeCode(
     code: string,
     language: string,
@@ -61,7 +61,7 @@ export async function executeCode(
         };
     }
 
-    const config = PISTON_CONFIG[normalizedLang];
+    const config = WANDBOX_CONFIG[normalizedLang];
     if (!config) {
         return {
             success: false,
@@ -85,17 +85,15 @@ export async function executeCode(
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-        const response = await fetch("https://emkc.org/api/v2/piston/execute", {
+        const response = await fetch("https://wandbox.org/api/compile.json", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                language: config.language,
-                version: config.version,
-                files: [{ name: config.fileName, content: wrappedCode }],
+                compiler: config.compiler,
+                code: wrappedCode,
                 stdin: testInput,
-                args: [],
-                compile_timeout: 10000,
-                run_timeout: 5000,
+                options: "",
+                save: false,
             }),
             signal: controller.signal,
         });
@@ -103,41 +101,47 @@ export async function executeCode(
         clearTimeout(timeoutId);
 
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error("[Executor] Wandbox error:", response.status, errorText);
             return {
                 success: false,
                 output: "",
-                error: `Server error: ${response.status}`,
+                error: `Wandbox error: ${response.status}`,
                 language: normalizedLang,
                 executionTime: performance.now() - startTime,
             };
         }
 
         const result = await response.json();
-        console.log(`[Executor] Piston result:`, result);
+        console.log(`[Executor] Wandbox result:`, {
+            hasCompilerError: !!result.compiler_error,
+            hasProgramError: !!result.program_error,
+            programOutputLength: result.program_output?.length || 0,
+        });
 
-        // Check for compile errors
-        if (result.compile && result.compile.code !== 0) {
+        // Check for compiler errors
+        if (result.compiler_error && result.compiler_error.length > 0) {
             return {
                 success: false,
                 output: "",
-                error: result.compile.stderr || result.compile.output || "Compilation error",
+                error: result.compiler_error,
                 language: normalizedLang,
                 executionTime: performance.now() - startTime,
             };
         }
 
         // Check for runtime errors
-        if (result.run && result.run.code !== 0) {
+        if (result.program_error && result.program_error.length > 0) {
             return {
                 success: false,
-                output: result.run.stdout || "",
-                error: result.run.stderr || "Runtime error",
+                output: result.program_output || "",
+                error: result.program_error,
                 language: normalizedLang,
                 executionTime: performance.now() - startTime,
             };
         }
 
-        const output = (result.run?.stdout || result.run?.output || "").trim();
+        const output = (result.program_output || "").trim();
         console.log(`[Executor] Output: "${output}"`);
 
         return {

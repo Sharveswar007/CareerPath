@@ -1,32 +1,5 @@
-// Backend execution service using Piston API (reliable and working)
-// This runs on the backend to hide API calls and avoid CORS issues
-
-const PISTON_API = "https://emkc.org/api/v2/piston/execute";
-
-interface PistonRequest {
-    language: string;
-    version: string;
-    files: Array<{ name: string; content: string }>;
-    stdin?: string;
-    args?: string[];
-    compile_timeout?: number;
-    run_timeout?: number;
-}
-
-interface PistonResponse {
-    run: {
-        stdout: string;
-        stderr: string;
-        code: number;
-        signal: string | null;
-    };
-    compile?: {
-        stdout: string;
-        stderr: string;
-        code: number;
-        signal: string | null;
-    };
-}
+// Backend execution service - tries multiple code execution services
+// Falls back between services for reliability
 
 interface ExecutionResult {
     success: boolean;
@@ -35,100 +8,40 @@ interface ExecutionResult {
     language: string;
 }
 
-// Language to Piston language mapping
-const LANGUAGE_CONFIG: Record<string, { language: string; version: string; extension: string }> = {
-    javascript: { language: "javascript", version: "18.8.0", extension: "js" },
-    js: { language: "javascript", version: "18.8.0", extension: "js" },
-    python: { language: "python", version: "3.10.0", extension: "py" },
-    py: { language: "python", version: "3.10.0", extension: "py" },
-    java: { language: "java", version: "15.0.1", extension: "java" },
-    cpp: { language: "cpp", version: "10.2.0", extension: "cpp" },
-    "c++": { language: "cpp", version: "10.2.0", extension: "cpp" },
-    c: { language: "c", version: "10.2.0", extension: "c" },
-    typescript: { language: "typescript", version: "4.7.4", extension: "ts" },
-    ts: { language: "typescript", version: "4.7.4", extension: "ts" },
-};
-
-export async function executeCodeViaBackend(
-    code: string,
-    language: string,
-    stdin: string = ""
-): Promise<ExecutionResult> {
-    const langKey = language.toLowerCase();
-    const config = LANGUAGE_CONFIG[langKey];
-
-    if (!config) {
-        return {
-            success: false,
-            output: "",
-            error: `Language "${language}" is not supported`,
-            language: langKey,
-        };
-    }
-
+// Try TIO.RUN (Try It Online) - Free, no auth required
+async function executeTIO(code: string, language: string, stdin: string = ""): Promise<ExecutionResult | null> {
     try {
-        const requestBody: PistonRequest = {
-            language: config.language,
-            version: config.version,
-            files: [
-                {
-                    name: `main.${config.extension}`,
-                    content: code,
-                },
-            ],
-            stdin: stdin || undefined,
-            run_timeout: 15000,
+        const tioLanguages: Record<string, string> = {
+            python: "python3",
+            python3: "python3",
+            javascript: "node-javascript",
+            js: "node-javascript",
+            java: "java",
+            cpp: "gpp",
+            c: "gcc",
+            typescript: "node-javascript", // Run as JS
         };
 
-        console.log("[ExecutionService] Executing code via Piston API");
+        const tioLang = tioLanguages[language.toLowerCase()];
+        if (!tioLang) return null;
 
-        const response = await fetch(PISTON_API, {
+        const payload = `Vlang\n${tioLang.length}\n${tioLang}\nVstdin\n${stdin.length}\n${stdin}\nVcode\n${code.length}\n${code}`;
+
+        const response = await fetch("https://tio.run/api/run", {
             method: "POST",
+            body: payload,
             headers: {
-                "Content-Type": "application/json",
+                "Content-Type": "application/octet-stream",
             },
-            body: JSON.stringify(requestBody),
         });
 
-        if (!response.ok) {
-            console.error(`[ExecutionService] Piston error: ${response.status}`);
-            return {
-                success: false,
-                output: "",
-                error: `Execution service error: ${response.status}`,
-                language,
-            };
-        }
+        if (!response.ok) return null;
 
-        const result: PistonResponse = await response.json();
+        const text = await response.text();
+        const lines = text.split("\n");
+        const output = lines.slice(1).join("\n").trim();
 
-        // Check for compilation errors
-        if (result.compile && result.compile.code !== 0) {
-            const stderr = result.compile.stderr || result.compile.stdout || "Compilation failed";
-            console.error("[ExecutionService] Compilation error:", stderr);
-            return {
-                success: false,
-                output: "",
-                error: stderr,
-                language,
-            };
-        }
-
-        // Check for runtime errors
-        if (result.run.code !== 0) {
-            const stderr = result.run.stderr || "Runtime error";
-            const stdout = result.run.stdout || "";
-            console.error("[ExecutionService] Runtime error:", stderr);
-            return {
-                success: false,
-                output: stdout,
-                error: stderr,
-                language,
-            };
-        }
-
-        const output = (result.run.stdout || "").trim();
-        console.log("[ExecutionService] Execution successful");
+        console.log("[ExecutionService] TIO execution successful");
 
         return {
             success: true,
@@ -136,13 +49,132 @@ export async function executeCodeViaBackend(
             error: null,
             language,
         };
-    } catch (error) {
-        console.error("[ExecutionService] Error:", error);
+    } catch (e) {
+        console.error("[ExecutionService] TIO failed:", e);
+        return null;
+    }
+}
+
+// Try Wandbox (https://wandbox.org) - Free, no auth required
+async function executeWandbox(code: string, language: string, stdin: string = ""): Promise<ExecutionResult | null> {
+    try {
+        const wandboxLanguages: Record<string, string> = {
+            python: "python3-head",
+            python3: "python3-head",
+            javascript: "nodejs-head",
+            js: "nodejs-head",
+            java: "openjdk-head",
+            cpp: "gcc-head",
+            "c++": "gcc-head",
+            c: "gcc-head-c",
+            ruby: "ruby-head",
+            go: "go-head",
+            rust: "rust-head",
+            php: "php-head",
+        };
+
+        const compiler = wandboxLanguages[language.toLowerCase()];
+        if (!compiler) return null;
+
+        console.log("[ExecutionService] Wandbox request - compiler:", compiler);
+
+        const response = await fetch("https://wandbox.org/api/compile.json", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            body: JSON.stringify({
+                compiler: compiler,
+                code: code,
+                stdin: stdin || "",
+                options: "",
+                save: false,
+            }),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("[ExecutionService] Wandbox HTTP error:", response.status, errorText);
+            return null;
+        }
+
+        const result = await response.json();
+        
+        console.log("[ExecutionService] Wandbox response keys:", Object.keys(result));
+
+        // Check for compiler errors
+        if (result.compiler_error) {
+            console.error("[ExecutionService] Wandbox compiler error:", result.compiler_error);
+            return {
+                success: false,
+                output: result.compiler_output || "",
+                error: result.compiler_error,
+                language,
+            };
+        }
+
+        // Check for runtime errors
+        if (result.program_error) {
+            console.error("[ExecutionService] Wandbox runtime error:", result.program_error);
+            return {
+                success: false,
+                output: result.program_output || "",
+                error: result.program_error,
+                language,
+            };
+        }
+
+        const output = (result.program_output || "").trim();
+        console.log("[ExecutionService] Wandbox execution successful");
+
+        return {
+            success: true,
+            output: output,
+            error: null,
+            language,
+        };
+    } catch (e) {
+        console.error("[ExecutionService] Wandbox failed:", e);
+        return null;
+    }
+}
+
+// Main execution function that tries multiple services
+export async function executeCodeViaBackend(
+    code: string,
+    language: string,
+    stdin: string = ""
+): Promise<ExecutionResult> {
+    const langKey = language.toLowerCase();
+
+    console.log(`[ExecutionService] Attempting to execute ${langKey} code`);
+
+    if (!["python", "javascript", "java", "cpp", "c", "typescript", "py", "js"].includes(langKey)) {
         return {
             success: false,
             output: "",
-            error: error instanceof Error ? error.message : "Execution failed",
-            language,
+            error: `Language "${language}" is not supported. Supported: JavaScript, Python, Java, C++, C, TypeScript`,
+            language: langKey,
         };
     }
+
+    // Try TIO first (most reliable)
+    console.log("[ExecutionService] Trying TIO.RUN...");
+    let result = await executeTIO(code, langKey, stdin);
+    if (result) return result;
+
+    // Fallback to Wandbox
+    console.log("[ExecutionService] TIO failed, trying Wandbox...");
+    result = await executeWandbox(code, langKey, stdin);
+    if (result) return result;
+
+    // All services failed
+    console.error("[ExecutionService] All execution services failed");
+    return {
+        success: false,
+        output: "",
+        error: "Code execution services are temporarily unavailable. Please try again later.",
+        language: langKey,
+    };
 }

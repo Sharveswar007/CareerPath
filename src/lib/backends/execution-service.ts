@@ -5,6 +5,7 @@ import { execSync } from "child_process";
 import { writeFileSync, unlinkSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
+import { tmpdir } from "os";
 
 interface ExecutionResult {
     success: boolean;
@@ -13,21 +14,44 @@ interface ExecutionResult {
     language: string;
 }
 
+// Try to find Python executable
+function findPythonCommand(): string | null {
+    const pythonCmds = ["python", "python3", "py"];
+    for (const cmd of pythonCmds) {
+        try {
+            execSync(`${cmd} --version`, { stdio: "ignore" });
+            console.log(`[ExecutionService] Found Python: ${cmd}`);
+            return cmd;
+        } catch (e) {
+            // Command not found, try next one
+        }
+    }
+    return null;
+}
+
 // Execute Python code natively
 async function executePythonNative(code: string, stdin: string = ""): Promise<ExecutionResult | null> {
     let tempFile: string = "";
     try {
         console.log("[ExecutionService] Executing Python natively");
         
-        // Create temporary file for the code
-        tempFile = join("/tmp", `code_${randomUUID()}.py`);
+        // Find Python command
+        const pythonCmd = findPythonCommand();
+        if (!pythonCmd) {
+            console.error("[ExecutionService] Python not found in PATH");
+            return null;
+        }
+
+        // Create temporary file for the code using OS temp directory
+        tempFile = join(tmpdir(), `code_${randomUUID()}.py`);
         writeFileSync(tempFile, code);
         
-        const output = execSync(`python "${tempFile}"`, {
+        const output = execSync(`${pythonCmd} "${tempFile}"`, {
             timeout: 10000,
             encoding: "utf-8",
             stdio: ["pipe", "pipe", "pipe"],
             input: stdin || "",
+            shell: true,
         });
 
         console.log("[ExecutionService] Python execution successful");
@@ -64,7 +88,7 @@ async function executeJavaNative(code: string, stdin: string = ""): Promise<Exec
         console.log("[ExecutionService] Executing Java natively");
         
         // Create temporary file - Java requires specific filename format
-        tempFile = join("/tmp", `Code_${randomUUID()}.java`);
+        tempFile = join(tmpdir(), `Code_${randomUUID()}.java`);
         
         // Wrap code to make it a valid Java class
         const wrappedCode = `
@@ -82,6 +106,7 @@ public class Code_${randomUUID().replace(/-/g, "")} {
             encoding: "utf-8",
             stdio: ["pipe", "pipe", "pipe"],
             input: stdin || "",
+            shell: true,
         });
 
         console.log("[ExecutionService] Java execution successful");
@@ -115,8 +140,8 @@ async function executeJavaScriptNative(code: string, stdin: string = ""): Promis
     try {
         console.log("[ExecutionService] Executing JavaScript natively");
         
-        // Create temporary file for the code
-        tempFile = join("/tmp", `code_${randomUUID()}.js`);
+        // Create temporary file for the code using OS temp directory
+        tempFile = join(tmpdir(), `code_${randomUUID()}.js`);
         
         // Wrap code to capture output and handle stdin
         const wrappedCode = `
@@ -152,6 +177,7 @@ async function executeJavaScriptNative(code: string, stdin: string = ""): Promis
             timeout: 10000,
             encoding: "utf-8",
             stdio: ["pipe", "pipe", "pipe"],
+            shell: true,
         });
 
         console.log("[ExecutionService] JavaScript execution successful");

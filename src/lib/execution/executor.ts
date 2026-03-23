@@ -1,5 +1,5 @@
-// Unified Code Executor - All languages via Wandbox API
-// Simpler and more reliable than browser-based execution
+// Unified Code Executor - All code execution via backend API
+// Frontend calls backend service which uses Piston API
 
 export interface ExecutionResult {
     success: boolean;
@@ -28,20 +28,12 @@ export function isLanguageSupported(lang: string): lang is SupportedLanguage {
     return SUPPORTED_LANGUAGES.includes(normalized);
 }
 
-// For compatibility - all use Wandbox now
+// For compatibility
 export function isBrowserLanguage(lang: string): boolean {
-    return false; // All use Wandbox API now
+    return false; // All execution via backend API
 }
 
-// Language configuration for Wandbox API
-const WANDBOX_CONFIG: Record<string, { compiler: string }> = {
-    javascript: { compiler: "node-head" },
-    python: { compiler: "python3" },
-    java: { compiler: "java-openjdk-head" },
-    cpp: { compiler: "gcc-head" },
-};
-
-// Execute code using Wandbox API
+// Execute code by calling backend API
 export async function executeCode(
     code: string,
     language: string,
@@ -61,16 +53,6 @@ export async function executeCode(
         };
     }
 
-    const config = WANDBOX_CONFIG[normalizedLang];
-    if (!config) {
-        return {
-            success: false,
-            output: "",
-            error: `No config for language: ${normalizedLang}`,
-            language: normalizedLang,
-        };
-    }
-
     // Wrap code to auto-call the user's function with test input
     let wrappedCode = code;
 
@@ -82,78 +64,46 @@ export async function executeCode(
     // For Java/C++, user must handle stdin themselves for now
 
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-        const response = await fetch("https://wandbox.org/api/compile.json", {
+        console.log("[Executor] Calling backend API at /api/challenges/run");
+        
+        const response = await fetch("/api/challenges/run", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                compiler: config.compiler,
                 code: wrappedCode,
+                language: normalizedLang,
                 stdin: testInput,
-                options: "",
-                save: false,
             }),
-            signal: controller.signal,
         });
-
-        clearTimeout(timeoutId);
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error("[Executor] Wandbox error:", response.status, errorText);
+            console.error("[Executor] API error:", response.status, errorText);
             return {
                 success: false,
                 output: "",
-                error: `Wandbox error: ${response.status}`,
+                error: `API error: ${response.status}`,
                 language: normalizedLang,
                 executionTime: performance.now() - startTime,
             };
         }
 
         const result = await response.json();
-        console.log(`[Executor] Wandbox result:`, {
-            hasCompilerError: !!result.compiler_error,
-            hasProgramError: !!result.program_error,
-            programOutputLength: result.program_output?.length || 0,
+        console.log("[Executor] API response:", {
+            success: result.success,
+            outputLength: result.output?.length || 0,
+            error: result.error,
         });
 
-        // Check for compiler errors
-        if (result.compiler_error && result.compiler_error.length > 0) {
-            return {
-                success: false,
-                output: "",
-                error: result.compiler_error,
-                language: normalizedLang,
-                executionTime: performance.now() - startTime,
-            };
-        }
-
-        // Check for runtime errors
-        if (result.program_error && result.program_error.length > 0) {
-            return {
-                success: false,
-                output: result.program_output || "",
-                error: result.program_error,
-                language: normalizedLang,
-                executionTime: performance.now() - startTime,
-            };
-        }
-
-        const output = (result.program_output || "").trim();
-        console.log(`[Executor] Output: "${output}"`);
-
         return {
-            success: true,
-            output,
-            error: null,
+            success: result.success,
+            output: result.output || "",
+            error: result.error || null,
             language: normalizedLang,
             executionTime: performance.now() - startTime,
         };
-
     } catch (error: any) {
-        console.error(`[Executor] Error:`, error);
+        console.error("[Executor] Error:", error);
 
         if (error.name === "AbortError") {
             return {

@@ -390,39 +390,41 @@ export async function executeCodeViaBackend(
         };
     }
 
+    // Try Wandbox first (PRIMARY) for all languages
+    console.log("[ExecutionService] Trying Wandbox (primary)...");
+    let result = await executeWandbox(code, langKey, stdin);
+    if (result) return result;
+
+    // Fallback to native execution if Wandbox fails
+    console.log("[ExecutionService] Wandbox failed, trying native execution as fallback...");
+
     // For JavaScript/TypeScript, use native Node.js execution
     if (langKey === "javascript" || langKey === "js" || langKey === "typescript") {
-        console.log("[ExecutionService] Using native JavaScript execution");
-        const result = await executeJavaScriptNative(code, stdin);
-        if (result) return result;
+        console.log("[ExecutionService] Trying native JavaScript execution...");
+        const nativeResult = await executeJavaScriptNative(code, stdin);
+        if (nativeResult) return nativeResult;
     }
 
-    // For Python, try native execution first
+    // For Python, try native execution
     if (langKey === "python" || langKey === "py") {
         console.log("[ExecutionService] Trying native Python execution...");
-        const result = await executePythonNative(code, stdin);
-        if (result) return result;
-        // Fall through to external services if native fails
+        const nativeResult = await executePythonNative(code, stdin);
+        if (nativeResult) return nativeResult;
     }
 
     // For Java, try native execution
     if (langKey === "java") {
         console.log("[ExecutionService] Trying native Java execution...");
-        const result = await executeJavaNative(code, stdin);
-        if (result) return result;
+        const nativeResult = await executeJavaNative(code, stdin);
+        if (nativeResult) return nativeResult;
     }
 
-    // Try Judge0 for compiled languages
+    // Try Judge0 as last fallback
     if (["cpp", "c", "java"].includes(langKey)) {
-        console.log("[ExecutionService] Trying Judge0...");
-        let result = await executeJudge0(code, langKey, stdin);
+        console.log("[ExecutionService] Trying Judge0 as last fallback...");
+        result = await executeJudge0(code, langKey, stdin);
         if (result) return result;
     }
-
-    // Fallback to Wandbox for any language
-    console.log("[ExecutionService] Trying Wandbox as fallback...");
-    let result = await executeWandbox(code, langKey, stdin);
-    if (result) return result;
 
     // All services failed
     console.error("[ExecutionService] All execution services failed");

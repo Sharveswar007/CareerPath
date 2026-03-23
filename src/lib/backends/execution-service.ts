@@ -51,7 +51,6 @@ async function executePythonNative(code: string, stdin: string = ""): Promise<Ex
             encoding: "utf-8",
             stdio: ["pipe", "pipe", "pipe"],
             input: stdin || "",
-            shell: true,
         });
 
         console.log("[ExecutionService] Python execution successful");
@@ -106,7 +105,6 @@ public class Code_${randomUUID().replace(/-/g, "")} {
             encoding: "utf-8",
             stdio: ["pipe", "pipe", "pipe"],
             input: stdin || "",
-            shell: true,
         });
 
         console.log("[ExecutionService] Java execution successful");
@@ -177,7 +175,6 @@ async function executeJavaScriptNative(code: string, stdin: string = ""): Promis
             timeout: 10000,
             encoding: "utf-8",
             stdio: ["pipe", "pipe", "pipe"],
-            shell: true,
         });
 
         console.log("[ExecutionService] JavaScript execution successful");

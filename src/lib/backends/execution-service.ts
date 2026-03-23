@@ -1,6 +1,11 @@
 // Backend execution service - tries multiple code execution services
 // Falls back between services for reliability
 
+import { execSync } from "child_process";
+import { writeFileSync, unlinkSync } from "fs";
+import { join } from "path";
+import { randomUUID } from "crypto";
+
 interface ExecutionResult {
     success: boolean;
     output: string;
@@ -8,49 +13,252 @@ interface ExecutionResult {
     language: string;
 }
 
-// Try TIO.RUN (Try It Online) - Free, no auth required
-async function executeTIO(code: string, language: string, stdin: string = ""): Promise<ExecutionResult | null> {
+// Execute Python code natively
+async function executePythonNative(code: string, stdin: string = ""): Promise<ExecutionResult | null> {
+    let tempFile: string = "";
     try {
-        const tioLanguages: Record<string, string> = {
-            python: "python3",
-            python3: "python3",
-            javascript: "node-javascript",
-            js: "node-javascript",
-            java: "java",
-            cpp: "gpp",
-            c: "gcc",
-            typescript: "node-javascript", // Run as JS
-        };
-
-        const tioLang = tioLanguages[language.toLowerCase()];
-        if (!tioLang) return null;
-
-        const payload = `Vlang\n${tioLang.length}\n${tioLang}\nVstdin\n${stdin.length}\n${stdin}\nVcode\n${code.length}\n${code}`;
-
-        const response = await fetch("https://tio.run/api/run", {
-            method: "POST",
-            body: payload,
-            headers: {
-                "Content-Type": "application/octet-stream",
-            },
+        console.log("[ExecutionService] Executing Python natively");
+        
+        // Create temporary file for the code
+        tempFile = join("/tmp", `code_${randomUUID()}.py`);
+        writeFileSync(tempFile, code);
+        
+        const output = execSync(`python "${tempFile}"`, {
+            timeout: 10000,
+            encoding: "utf-8",
+            stdio: ["pipe", "pipe", "pipe"],
+            input: stdin || "",
         });
 
-        if (!response.ok) return null;
-
-        const text = await response.text();
-        const lines = text.split("\n");
-        const output = lines.slice(1).join("\n").trim();
-
-        console.log("[ExecutionService] TIO execution successful");
+        console.log("[ExecutionService] Python execution successful");
 
         return {
             success: true,
-            output,
+            output: output.trim(),
+            error: null,
+            language: "python",
+        };
+    } catch (e: any) {
+        const errorMessage = e.stderr?.toString() || e.message || String(e);
+        console.error("[ExecutionService] Python execution failed:", errorMessage);
+        
+        return {
+            success: false,
+            output: "",
+            error: errorMessage.substring(0, 500),
+            language: "python",
+        };
+    } finally {
+        try {
+            if (tempFile) unlinkSync(tempFile);
+        } catch (e) {
+            console.error("[ExecutionService] Failed to cleanup temp file:", e);
+        }
+    }
+}
+
+// Execute Java code natively
+async function executeJavaNative(code: string, stdin: string = ""): Promise<ExecutionResult | null> {
+    let tempFile: string = "";
+    try {
+        console.log("[ExecutionService] Executing Java natively");
+        
+        // Create temporary file - Java requires specific filename format
+        tempFile = join("/tmp", `Code_${randomUUID()}.java`);
+        
+        // Wrap code to make it a valid Java class
+        const wrappedCode = `
+public class Code_${randomUUID().replace(/-/g, "")} {
+    public static void main(String[] args) {
+        ${code}
+    }
+}
+`;
+        
+        writeFileSync(tempFile, wrappedCode);
+        
+        const output = execSync(`java "${tempFile}"`, {
+            timeout: 10000,
+            encoding: "utf-8",
+            stdio: ["pipe", "pipe", "pipe"],
+            input: stdin || "",
+        });
+
+        console.log("[ExecutionService] Java execution successful");
+
+        return {
+            success: true,
+            output: output.trim(),
+            error: null,
+            language: "java",
+        };
+    } catch (e: any) {
+        const errorMessage = e.stderr?.toString() || e.message || String(e);
+        console.error("[ExecutionService] Java execution failed:", errorMessage);
+        
+        return {
+            success: false,
+            output: "",
+            error: errorMessage.substring(0, 500),
+            language: "java",
+        };
+    } finally {
+        try {
+            if (tempFile) unlinkSync(tempFile);
+        } catch (e) {
+            console.error("[ExecutionService] Failed to cleanup temp file:", e);
+        }
+    }
+}
+async function executeJavaScriptNative(code: string, stdin: string = ""): Promise<ExecutionResult | null> {
+    let tempFile: string = "";
+    try {
+        console.log("[ExecutionService] Executing JavaScript natively");
+        
+        // Create temporary file for the code
+        tempFile = join("/tmp", `code_${randomUUID()}.js`);
+        
+        // Wrap code to capture output and handle stdin
+        const wrappedCode = `
+(async () => {
+    const outputs = [];
+    const originalLog = console.log;
+    const originalError = console.error;
+    
+    console.log = (...args) => outputs.push(args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' '));
+    console.error = (...args) => outputs.push(args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' '));
+    
+    try {
+        ${code}
+        console.log = originalLog;
+        console.error = originalError;
+        if (outputs.length > 0) {
+            console.log(outputs.join('\\n'));
+        }
+    } catch (err) {
+        console.log = originalLog;
+        console.error = originalError;
+        if (outputs.length > 0) {
+            console.log(outputs.join('\\n'));
+        }
+        throw err;
+    }
+})();
+`;
+
+        writeFileSync(tempFile, wrappedCode);
+        
+        const output = execSync(`node "${tempFile}"`, {
+            timeout: 10000,
+            encoding: "utf-8",
+            stdio: ["pipe", "pipe", "pipe"],
+        });
+
+        console.log("[ExecutionService] JavaScript execution successful");
+
+        return {
+            success: true,
+            output: output.trim(),
+            error: null,
+            language: "javascript",
+        };
+    } catch (e: any) {
+        const errorMessage = e.stderr?.toString() || e.message || String(e);
+        console.error("[ExecutionService] JavaScript execution failed:", errorMessage);
+        
+        return {
+            success: false,
+            output: "",
+            error: errorMessage.substring(0, 500), // Limit error message length
+            language: "javascript",
+        };
+    } finally {
+        // Clean up temporary file
+        try {
+            if (tempFile) unlinkSync(tempFile);
+        } catch (e) {
+            console.error("[ExecutionService] Failed to cleanup temp file:", e);
+        }
+    }
+}
+
+// Try Judge0 API - Free, no auth required
+async function executeJudge0(code: string, language: string, stdin: string = ""): Promise<ExecutionResult | null> {
+    try {
+        // Judge0 language IDs
+        const judge0Languages: Record<string, number> = {
+            python: 71,      // Python 3
+            python3: 71,
+            javascript: 63,   // Node.js
+            js: 63,
+            java: 62,        // Java
+            cpp: 54,         // C++ (gcc)
+            "c++": 54,
+            c: 50,           // C (gcc)
+            typescript: 63,  // Run as JavaScript
+        };
+
+        const languageId = judge0Languages[language.toLowerCase()];
+        if (languageId === undefined) return null;
+
+        console.log("[ExecutionService] Judge0 request - language ID:", languageId);
+
+        // Step 1: Submit code for execution
+        const submitResponse = await fetch("https://judge0.p.rapidapi.com/submissions?base64_encoded=false&wait=true", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-RapidAPI-Key": "16726e4f4dmsh53eeca2383340c0p1f24dfjsnc4ecfdf6f9d5",
+                "X-RapidAPI-Host": "judge0.p.rapidapi.com"
+            },
+            body: JSON.stringify({
+                language_id: languageId,
+                source_code: code,
+                stdin: stdin || "",
+                cpu_time_limit: 5,
+                memory_limit: 64000
+            }),
+        });
+
+        if (!submitResponse.ok) {
+            console.error("[ExecutionService] Judge0 HTTP error:", submitResponse.status);
+            return null;
+        }
+
+        const result = await submitResponse.json();
+        console.log("[ExecutionService] Judge0 response status:", result.status);
+
+        // Check for compilation errors
+        if (result.compile_output) {
+            return {
+                success: false,
+                output: "",
+                error: result.compile_output,
+                language,
+            };
+        }
+
+        // Check for runtime errors
+        if (result.runtime_error) {
+            return {
+                success: false,
+                output: result.stdout || "",
+                error: result.runtime_error,
+                language,
+            };
+        }
+
+        const output = (result.stdout || "").trim();
+        console.log("[ExecutionService] Judge0 execution successful");
+
+        return {
+            success: true,
+            output: output,
             error: null,
             language,
         };
     } catch (e) {
-        console.error("[ExecutionService] TIO failed:", e);
+        console.error("[ExecutionService] Judge0 failed:", e);
         return null;
     }
 }
@@ -58,19 +266,20 @@ async function executeTIO(code: string, language: string, stdin: string = ""): P
 // Try Wandbox (https://wandbox.org) - Free, no auth required
 async function executeWandbox(code: string, language: string, stdin: string = ""): Promise<ExecutionResult | null> {
     try {
+        // Wandbox compiler list (simplified)
         const wandboxLanguages: Record<string, string> = {
-            python: "python3-head",
-            python3: "python3-head",
-            javascript: "nodejs-head",
-            js: "nodejs-head",
-            java: "openjdk-head",
+            python: "python",
+            python3: "python",
+            javascript: "nodejs",
+            js: "nodejs",
+            java: "java",
             cpp: "gcc-head",
             "c++": "gcc-head",
-            c: "gcc-head-c",
-            ruby: "ruby-head",
-            go: "go-head",
+            c: "gcc-head",
+            ruby: "ruby",
+            go: "go",
             rust: "rust-head",
-            php: "php-head",
+            php: "php",
         };
 
         const compiler = wandboxLanguages[language.toLowerCase()];
@@ -82,13 +291,12 @@ async function executeWandbox(code: string, language: string, stdin: string = ""
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Accept": "application/json",
             },
             body: JSON.stringify({
                 compiler: compiler,
                 code: code,
                 stdin: stdin || "",
-                options: "",
+                options: "-O0 -Wall",
                 save: false,
             }),
         });
@@ -159,14 +367,38 @@ export async function executeCodeViaBackend(
         };
     }
 
-    // Try TIO first (most reliable)
-    console.log("[ExecutionService] Trying TIO.RUN...");
-    let result = await executeTIO(code, langKey, stdin);
-    if (result) return result;
+    // For JavaScript/TypeScript, use native Node.js execution
+    if (langKey === "javascript" || langKey === "js" || langKey === "typescript") {
+        console.log("[ExecutionService] Using native JavaScript execution");
+        const result = await executeJavaScriptNative(code, stdin);
+        if (result) return result;
+    }
 
-    // Fallback to Wandbox
-    console.log("[ExecutionService] TIO failed, trying Wandbox...");
-    result = await executeWandbox(code, langKey, stdin);
+    // For Python, try native execution first
+    if (langKey === "python" || langKey === "py") {
+        console.log("[ExecutionService] Trying native Python execution...");
+        const result = await executePythonNative(code, stdin);
+        if (result) return result;
+        // Fall through to external services if native fails
+    }
+
+    // For Java, try native execution
+    if (langKey === "java") {
+        console.log("[ExecutionService] Trying native Java execution...");
+        const result = await executeJavaNative(code, stdin);
+        if (result) return result;
+    }
+
+    // Try Judge0 for compiled languages
+    if (["cpp", "c", "java"].includes(langKey)) {
+        console.log("[ExecutionService] Trying Judge0...");
+        let result = await executeJudge0(code, langKey, stdin);
+        if (result) return result;
+    }
+
+    // Fallback to Wandbox for any language
+    console.log("[ExecutionService] Trying Wandbox as fallback...");
+    let result = await executeWandbox(code, langKey, stdin);
     if (result) return result;
 
     // All services failed
@@ -174,7 +406,7 @@ export async function executeCodeViaBackend(
     return {
         success: false,
         output: "",
-        error: "Code execution services are temporarily unavailable. Please try again later.",
+        error: "Code execution services are temporarily unavailable. Please try again or refresh the page.",
         language: langKey,
     };
 }

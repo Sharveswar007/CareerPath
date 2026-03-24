@@ -56,9 +56,11 @@ export async function executeCode(
     // Wrap code to auto-call the user's function with test input
     let wrappedCode = code;
 
-    if (normalizedLang === "python") {
+    const hasTestInput = testInput.trim().length > 0;
+
+    if (hasTestInput && normalizedLang === "python") {
         wrappedCode = wrapPythonCode(code, testInput);
-    } else if (normalizedLang === "javascript") {
+    } else if (hasTestInput && normalizedLang === "javascript") {
         wrappedCode = wrapJavaScriptCode(code, testInput);
     }
     // For Java/C++, user must handle stdin themselves for now
@@ -89,11 +91,12 @@ export async function executeCode(
         }
 
         const result = await response.json();
-        console.log("[Executor] API response:", {
+        const apiSummary = {
             success: result.success,
             outputLength: result.output?.length || 0,
             error: result.error,
-        });
+        };
+        console.log("[Executor] API response:", JSON.stringify(apiSummary));
 
         return {
             success: result.success,

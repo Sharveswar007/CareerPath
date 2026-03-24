@@ -1,4 +1,4 @@
-// Real Code Execution API - Uses Piston for actual compilation
+// Real Code Execution API - Uses backend execution service (Wandbox-first)
 import { NextRequest, NextResponse } from "next/server";
 import { executeCodeViaBackend } from "@/lib/backends/execution-service";
 
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // Execute the code using backend Piston service with optional stdin
+        // Execute code through backend execution service with optional stdin
         const result = await executeCodeViaBackend(code, language, stdin || "");
 
         return NextResponse.json({

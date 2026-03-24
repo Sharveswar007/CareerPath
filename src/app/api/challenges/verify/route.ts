@@ -1,5 +1,5 @@
 // Challenge Code Verification API - Test Case Based Verification
-// Runs actual test cases with robust comparison using Piston API backend
+// Runs actual test cases with robust comparison using backend execution service
 
 import { NextRequest, NextResponse } from "next/server";
 import { executeCodeViaBackend } from "@/lib/backends/execution-service";

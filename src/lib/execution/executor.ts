@@ -1,5 +1,5 @@
 // Unified Code Executor - All code execution via backend API
-// Frontend calls backend service which uses Piston API
+// Frontend calls backend service which uses Wandbox-first execution
 
 export interface ExecutionResult {
     success: boolean;

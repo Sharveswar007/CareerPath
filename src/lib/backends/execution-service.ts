@@ -289,20 +289,22 @@ async function executeJudge0(code: string, language: string, stdin: string = "")
 // Try Wandbox (https://wandbox.org) - Free, no auth required
 async function executeWandbox(code: string, language: string, stdin: string = ""): Promise<ExecutionResult | null> {
     try {
-        // Wandbox compiler list (simplified)
+        // Wandbox compiler IDs from https://wandbox.org/api/list.json
         const wandboxLanguages: Record<string, string> = {
-            python: "python",
-            python3: "python",
-            javascript: "nodejs",
-            js: "nodejs",
-            java: "java",
+            python: "cpython-3.12.7",
+            python3: "cpython-3.12.7",
+            javascript: "nodejs-20.17.0",
+            js: "nodejs-20.17.0",
+            java: "openjdk-jdk-21+35",
             cpp: "gcc-head",
             "c++": "gcc-head",
-            c: "gcc-head",
-            ruby: "ruby",
-            go: "go",
-            rust: "rust-head",
-            php: "php",
+            c: "gcc-head-c",
+            ruby: "ruby-3.3.6",
+            go: "go-1.23.2",
+            rust: "rust-1.82.0",
+            php: "php-8.3.12",
+            typescript: "nodejs-20.17.0",
+            ts: "nodejs-20.17.0",
         };
 
         const compiler = wandboxLanguages[language.toLowerCase()];
@@ -319,7 +321,7 @@ async function executeWandbox(code: string, language: string, stdin: string = ""
                 compiler: compiler,
                 code: code,
                 stdin: stdin || "",
-                options: "-O0 -Wall",
+                options: "",
                 save: false,
             }),
         });

@@ -10,6 +10,75 @@ const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY,
 });
 
+interface SubmittedQuestion {
+    question: string;
+    options?: string[];
+    correctAnswer: unknown;
+    userAnswer: unknown;
+    isCorrect?: boolean;
+    [key: string]: unknown;
+}
+
+function normalizeText(value: string): string {
+    return value.trim().toLowerCase();
+}
+
+function parseIndex(value: unknown, optionsLength: number): number {
+    if (typeof value === "number" && Number.isInteger(value)) {
+        if (value >= 0 && value < optionsLength) return value;
+        if (value >= 1 && value <= optionsLength) return value - 1;
+    }
+
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        const numeric = Number(trimmed);
+        if (Number.isInteger(numeric)) {
+            if (numeric >= 0 && numeric < optionsLength) return numeric;
+            if (numeric >= 1 && numeric <= optionsLength) return numeric - 1;
+        }
+
+        const optionLetterMatch = trimmed.match(/^option\s*([A-D])$/i);
+        if (optionLetterMatch) {
+            const idx = optionLetterMatch[1].toUpperCase().charCodeAt(0) - 65;
+            if (idx >= 0 && idx < optionsLength) return idx;
+        }
+    }
+
+    return -1;
+}
+
+function findOptionIndexByText(value: unknown, options: string[]): number {
+    if (typeof value !== "string") return -1;
+    const target = normalizeText(value);
+    return options.findIndex((option) => normalizeText(option) === target);
+}
+
+function resolveAnswerIndex(value: unknown, options: string[]): number {
+    const byIndex = parseIndex(value, options.length);
+    if (byIndex >= 0) return byIndex;
+    return findOptionIndexByText(value, options);
+}
+
+function normalizeQuestions(questions: SubmittedQuestion[]): SubmittedQuestion[] {
+    return questions.map((q) => {
+        const options = Array.isArray(q.options)
+            ? q.options.filter((opt): opt is string => typeof opt === "string")
+            : [];
+
+        const correctIndex = resolveAnswerIndex(q.correctAnswer, options);
+        const userIndex = resolveAnswerIndex(q.userAnswer, options);
+        const isCorrect = correctIndex >= 0 && userIndex >= 0 && correctIndex === userIndex;
+
+        return {
+            ...q,
+            options,
+            correctAnswer: correctIndex >= 0 ? correctIndex : q.correctAnswer,
+            userAnswer: userIndex >= 0 ? userIndex : q.userAnswer,
+            isCorrect,
+        };
+    });
+}
+
 export async function POST(request: NextRequest) {
     try {
         const supabase = await createClient();
@@ -26,9 +95,6 @@ export async function POST(request: NextRequest) {
             career,
             careerQuestions,
             logicQuestions,
-            careerScore,
-            logicScore,
-            totalScore,
         } = await request.json();
 
         if (!career || !careerQuestions || !logicQuestions) {
@@ -38,14 +104,22 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const normalizedCareerQuestions = normalizeQuestions(careerQuestions as SubmittedQuestion[]);
+        const normalizedLogicQuestions = normalizeQuestions(logicQuestions as SubmittedQuestion[]);
+
+        // Security: scores are recomputed server-side only (do not trust client-provided scores)
+        const careerScore = normalizedCareerQuestions.filter((q) => q.isCorrect).length;
+        const logicScore = normalizedLogicQuestions.filter((q) => q.isCorrect).length;
+        const totalScore = careerScore + logicScore;
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: assessment, error: assessmentError } = await (supabase as any)
             .from("user_assessments")
             .insert({
                 user_id: user.id,
                 selected_career: career,
-                career_questions: careerQuestions,
-                logic_questions: logicQuestions,
+                career_questions: normalizedCareerQuestions,
+                logic_questions: normalizedLogicQuestions,
                 career_score: careerScore,
                 logic_score: logicScore,
                 total_score: totalScore,
@@ -69,15 +143,15 @@ Assessment Results:
 - Total Score: ${totalScore}/20
 
 Incorrect Career Questions:
-${careerQuestions
-                .filter((q: { isCorrect: boolean }) => !q.isCorrect)
-                .map((q: { question: string }) => `- ${q.question}`)
+${normalizedCareerQuestions
+                .filter((q) => !q.isCorrect)
+                .map((q) => `- ${String(q.question ?? "")}`)
                 .join("\n")}
 
 Incorrect Logic Questions:
-${logicQuestions
-                .filter((q: { isCorrect: boolean }) => !q.isCorrect)
-                .map((q: { question: string }) => `- ${q.question}`)
+${normalizedLogicQuestions
+                .filter((q) => !q.isCorrect)
+                .map((q) => `- ${String(q.question ?? "")}`)
                 .join("\n")}
 
 Generate a comprehensive skill gap analysis. For the roadmap phases, suggest specific skills to learn but DO NOT include resources - I will add those separately.

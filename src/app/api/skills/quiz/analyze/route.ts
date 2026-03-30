@@ -8,6 +8,37 @@ const groq = new Groq({
     apiKey: process.env.GROQ_API_KEY!,
 });
 
+function normalizeText(value: string): string {
+    return value.trim().toLowerCase();
+}
+
+function resolveAnswerValue(question: any, value: unknown): string {
+    const options = Array.isArray(question.options)
+        ? question.options.filter((opt: unknown): opt is string => typeof opt === "string")
+        : [];
+
+    if (typeof value === "number" && Number.isInteger(value)) {
+        // Supports both 0-based and 1-based indices
+        if (value >= 0 && value < options.length) return options[value];
+        if (value >= 1 && value <= options.length) return options[value - 1];
+    }
+
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        const asNumber = Number(trimmed);
+        if (Number.isInteger(asNumber)) {
+            if (asNumber >= 0 && asNumber < options.length) return options[asNumber];
+            if (asNumber >= 1 && asNumber <= options.length) return options[asNumber - 1];
+        }
+
+        const byOptionText = options.find((opt: string) => normalizeText(opt) === normalizeText(trimmed));
+        if (byOptionText) return byOptionText;
+        return trimmed;
+    }
+
+    return "";
+}
+
 export async function POST(request: NextRequest) {
     try {
         const { career, answers, questions } = await request.json(); // answers: { qId: answerString }
@@ -21,7 +52,13 @@ export async function POST(request: NextRequest) {
         const total = questions.length;
 
         questions.forEach((q: any) => {
-            if (answers[q.id] === q.correctAnswer) {
+            const normalizedUserAnswer = resolveAnswerValue(q, answers[q.id]);
+            const normalizedCorrectAnswer = resolveAnswerValue(q, q.correctAnswer);
+            if (
+                normalizedUserAnswer &&
+                normalizedCorrectAnswer &&
+                normalizeText(normalizedUserAnswer) === normalizeText(normalizedCorrectAnswer)
+            ) {
                 correctCount++;
             }
         });

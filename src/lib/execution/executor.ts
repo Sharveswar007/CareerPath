@@ -164,7 +164,7 @@ def _parse_args(raw_input):
             escape = False
             continue
 
-        if char == "\\":
+        if char == chr(92):
             current.append(char)
             escape = True
             continue
@@ -275,7 +275,7 @@ function _parseArgs(rawInput) {
             continue;
         }
 
-        if (char === "\\") {
+        if (char === String.fromCharCode(92)) {
             current += char;
             escape = true;
             continue;

@@ -123,7 +123,7 @@ function generateFallbackQuestions(career: string, questionCount: number): Gener
 function normalizeQuestions(rawQuestions: unknown, prefix: string): GeneratedQuestion[] {
     if (!Array.isArray(rawQuestions)) return [];
 
-    return rawQuestions
+    const normalized = rawQuestions
         .map((question, index) => {
             if (!question || typeof question !== "object") return null;
 
@@ -154,6 +154,57 @@ function normalizeQuestions(rawQuestions: unknown, prefix: string): GeneratedQue
             } as GeneratedQuestion;
         })
         .filter((question): question is GeneratedQuestion => Boolean(question));
+
+    return normalized.map((question) => ensureCodeContextForOutputQuestion(question));
+}
+
+function isCodeOutputQuestion(questionText: string): boolean {
+    return /output of the following\s+python\s+code|following\s+python\s+code|python code/i.test(questionText);
+}
+
+function hasCodeBlock(questionText: string): boolean {
+    return /```[a-zA-Z]*\n[\s\S]*?```/.test(questionText);
+}
+
+function toPythonLiteral(option: string): string {
+    const trimmed = option.trim();
+    if (/^-?\d+(\.\d+)?$/.test(trimmed)) return trimmed;
+    if (/^(true|false)$/i.test(trimmed)) return trimmed.toLowerCase();
+    if (/^none$/i.test(trimmed)) return "None";
+    return JSON.stringify(trimmed);
+}
+
+function buildPythonSnippetForAnswer(answerOption: string): string {
+    if (/^error$/i.test(answerOption.trim())) {
+        return [
+            "a = 1",
+            "b = 0",
+            "print(a / b)",
+        ].join("\n");
+    }
+
+    const literal = toPythonLiteral(answerOption);
+    return [
+        `result = ${literal}`,
+        "print(result)",
+    ].join("\n");
+}
+
+function ensureCodeContextForOutputQuestion(question: GeneratedQuestion): GeneratedQuestion {
+    if (!isCodeOutputQuestion(question.question) || hasCodeBlock(question.question)) {
+        return question;
+    }
+
+    const safeIndex = Number.isInteger(question.correctAnswer)
+        ? Math.max(0, Math.min(question.correctAnswer, question.options.length - 1))
+        : 0;
+    const answerOption = question.options[safeIndex] ?? question.options[0] ?? "0";
+    const codeSnippet = buildPythonSnippetForAnswer(answerOption);
+
+    return {
+        ...question,
+        question: `${question.question.trim()}\n\n\`\`\`python\n${codeSnippet}\n\`\`\``,
+    };
 }
 
 function cleanGroqResponse(content: string): string {
@@ -209,6 +260,7 @@ Guidelines:
 - Use realistic workplace scenarios.
 - Keep options 4 per question.
 - correctAnswer MUST be a 0-based numeric index.
+- If a question asks for code output, include the full code snippet inside the question using a fenced Python code block.
 - Difficulty mix should be reasonable: easy, medium, hard.
 - Return EXACTLY the requested counts if possible.
 

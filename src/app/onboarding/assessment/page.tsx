@@ -33,6 +33,20 @@ interface Question {
     difficulty?: string;
 }
 
+function splitQuestionContent(questionText: string): { prompt: string; code: string | null; language: string } {
+    const match = questionText.match(/```([a-zA-Z]*)\n([\s\S]*?)```/);
+    if (!match) {
+        return { prompt: questionText, code: null, language: "" };
+    }
+
+    const fullBlock = match[0];
+    const language = (match[1] || "").toLowerCase();
+    const code = match[2]?.trimEnd() || "";
+    const prompt = questionText.replace(fullBlock, "").trim();
+
+    return { prompt, code, language };
+}
+
 export default function AssessmentPage() {
     const router = useRouter();
     const supabase = createClient();
@@ -108,6 +122,7 @@ export default function AssessmentPage() {
     }, [supabase, router]);
 
     const currentQuestion = questions[currentIndex];
+    const questionContent = currentQuestion ? splitQuestionContent(currentQuestion.question) : null;
     const progress = ((currentIndex + 1) / questions.length) * 100;
     const careerQuestions = questions.filter((q) => q.category === "career_knowledge");
     const logicQuestions = questions.filter((q) => q.category === "aptitude" || q.category === "situation");
@@ -332,9 +347,21 @@ export default function AssessmentPage() {
                                 )}
                             </div>
 
-                            <h2 className="text-lg font-semibold mb-6 leading-relaxed">
-                                {currentQuestion.question}
-                            </h2>
+                            <div className="mb-6 space-y-4">
+                                <h2 className="text-lg font-semibold leading-relaxed whitespace-pre-line">
+                                    {questionContent?.prompt || currentQuestion.question}
+                                </h2>
+                                {questionContent?.code && (
+                                    <div className="rounded-lg border border-border bg-muted/20 overflow-hidden">
+                                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
+                                            {(questionContent.language || "text").toUpperCase()}
+                                        </div>
+                                        <pre className="p-4 overflow-x-auto text-sm leading-6 font-mono whitespace-pre">
+                                            <code>{questionContent.code}</code>
+                                        </pre>
+                                    </div>
+                                )}
+                            </div>
 
                             <RadioGroup
                                 value={answers[currentQuestion.id]?.toString() || ""}

@@ -35,6 +35,55 @@ interface TestResult {
     error?: string;
 }
 
+function extractHintsFromDescription(description: string): string[] {
+    const lines = description.split("\n").map((line) => line.trim());
+    const hintsStart = lines.findIndex((line) => /^#{1,6}\s*hints\s*:?$/i.test(line) || /^hints\s*:?$/i.test(line));
+
+    if (hintsStart === -1) return [];
+
+    const hints: string[] = [];
+    for (let i = hintsStart + 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line) continue;
+        if (/^#{1,6}\s+/.test(line)) break;
+
+        const bulletMatch = line.match(/^[-*]\s+(.+)/);
+        const numberedMatch = line.match(/^\d+[.)]\s+(.+)/);
+
+        if (bulletMatch?.[1]) {
+            hints.push(bulletMatch[1].trim());
+        } else if (numberedMatch?.[1]) {
+            hints.push(numberedMatch[1].trim());
+        }
+    }
+
+    return hints;
+}
+
+function deriveHintsFromChallenge(challengeData: any): string[] {
+    const directHints = Array.isArray(challengeData?.fullData?.hints)
+        ? challengeData.fullData.hints.filter((hint: unknown): hint is string => typeof hint === "string" && hint.trim().length > 0)
+        : [];
+
+    if (directHints.length > 0) {
+        return directHints.slice(0, 5);
+    }
+
+    const descriptionHints = extractHintsFromDescription(String(challengeData?.description || ""));
+    if (descriptionHints.length > 0) {
+        return descriptionHints.slice(0, 5);
+    }
+
+    const category = String(challengeData?.fullData?.category || challengeData?.category || "this problem").toLowerCase();
+    const testCases = Array.isArray(challengeData?.fullData?.test_cases) ? challengeData.fullData.test_cases : [];
+
+    return [
+        `Break ${category} into smaller steps before writing full code.`,
+        `Use the visible examples to validate edge cases before submitting.`,
+        `Match your output format exactly with expected output from test cases (${testCases.length} tests available).`,
+    ];
+}
+
 // Mock Data (In a real app, fetch from DB/API)
 // For AI Generated challenges, we would fetch from `coding_challenges` table by ID.
 // Mock Data Removed - Fetching from DB only
@@ -122,6 +171,7 @@ export default function ChallengeDetailPage() {
     const [hasError, setHasError] = useState(false);
     const [testResults, setTestResults] = useState<TestResult[]>([]); // NEW: Store test results
     const supabase = createClient();
+    const challengeHints = challengeData ? deriveHintsFromChallenge(challengeData) : [];
 
     // Run code using hybrid executor
     const handleRun = async () => {
@@ -481,6 +531,20 @@ export default function ChallengeDetailPage() {
                                     <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
                                         {challengeData.description}
                                     </pre>
+                                </div>
+                            </TabsContent>
+
+                            <TabsContent value="hints" className="mt-0">
+                                <div className="space-y-3">
+                                    {challengeHints.map((hint, index) => (
+                                        <div
+                                            key={index}
+                                            className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-3"
+                                        >
+                                            <p className="text-xs text-violet-300 mb-1">Hint {index + 1}</p>
+                                            <p className="text-sm text-foreground leading-relaxed">{hint}</p>
+                                        </div>
+                                    ))}
                                 </div>
                             </TabsContent>
 

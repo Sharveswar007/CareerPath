@@ -35,6 +35,14 @@ interface TestResult {
     error?: string;
 }
 
+function getDraftKey(challengeId: string, language: string): string {
+    return `challenge-draft:${challengeId}:${language}`;
+}
+
+function getStarterCode(challengeData: any, language: string): string {
+    return String(challengeData?.starterCode?.[language] || "");
+}
+
 function extractHintsFromDescription(description: string): string[] {
     const lines = description.split("\n").map((line) => line.trim());
     const hintsStart = lines.findIndex((line) => /^#{1,6}\s*hints\s*:?$/i.test(line) || /^hints\s*:?$/i.test(line));
@@ -160,9 +168,30 @@ export default function ChallengeDetailPage() {
 
     // Update code when language changes
     useEffect(() => {
+        if (!challengeData?.id) return;
+
+        const draftKey = getDraftKey(challengeData.id, language);
+        const savedDraft = typeof window !== "undefined" ? localStorage.getItem(draftKey) : null;
+
+        if (savedDraft !== null) {
+            setCode(savedDraft);
+            return;
+        }
+
         // @ts-ignore
-        setCode(challengeData?.starterCode?.[language] || "");
+        setCode(getStarterCode(challengeData, language));
     }, [language, challengeData]);
+
+    useEffect(() => {
+        if (!challengeData?.id) return;
+
+        const draftKey = getDraftKey(challengeData.id, language);
+        const timer = window.setTimeout(() => {
+            localStorage.setItem(draftKey, code);
+        }, 300);
+
+        return () => window.clearTimeout(timer);
+    }, [code, challengeData, language]);
 
 
     const [showAnalysis, setShowAnalysis] = useState(false);
@@ -364,6 +393,10 @@ export default function ChallengeDetailPage() {
 
                 toast.success(`🎉 All ${testCases.length} test cases passed!`);
                 setShowAnalysis(true);
+
+                    if (challengeData?.id) {
+                        localStorage.removeItem(getDraftKey(challengeData.id, submitLang));
+                    }
 
                 // Generate replacement challenge in background
                 fetch("/api/challenges/bulk-generate", {

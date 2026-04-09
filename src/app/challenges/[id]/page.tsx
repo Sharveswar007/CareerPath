@@ -92,6 +92,43 @@ function deriveHintsFromChallenge(challengeData: any): string[] {
     ];
 }
 
+function tryParseStructuredOutput(value: string): unknown | null {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    if (!(trimmed.startsWith("[") || trimmed.startsWith("{"))) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(trimmed);
+    } catch {
+        return null;
+    }
+}
+
+function areOutputsEquivalent(actualOutput: string, expectedOutput: string): boolean {
+    const actual = actualOutput.trim();
+    const expected = expectedOutput.trim();
+
+    if (actual === expected) return true;
+    if (actual.toLowerCase() === expected.toLowerCase()) return true;
+
+    const actualNumber = Number(actual);
+    const expectedNumber = Number(expected);
+    if (!Number.isNaN(actualNumber) && !Number.isNaN(expectedNumber) && actualNumber === expectedNumber) {
+        return true;
+    }
+
+    const parsedActual = tryParseStructuredOutput(actual);
+    const parsedExpected = tryParseStructuredOutput(expected);
+    if (parsedActual !== null && parsedExpected !== null) {
+        return JSON.stringify(parsedActual) === JSON.stringify(parsedExpected);
+    }
+
+    return false;
+}
+
 // Mock Data (In a real app, fetch from DB/API)
 // For AI Generated challenges, we would fetch from `coding_challenges` table by ID.
 // Mock Data Removed - Fetching from DB only
@@ -319,9 +356,7 @@ export default function ChallengeDetailPage() {
                     }
 
                     const actualOutput = (execResult.output || "").trim();
-                    const passed = actualOutput === expectedOutput ||
-                        actualOutput.toLowerCase() === expectedOutput.toLowerCase() ||
-                        (parseFloat(actualOutput) === parseFloat(expectedOutput) && !isNaN(parseFloat(actualOutput)));
+                    const passed = areOutputsEquivalent(actualOutput, expectedOutput);
 
                     if (passed) passedCount++;
 

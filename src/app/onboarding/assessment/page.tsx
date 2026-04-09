@@ -64,11 +64,17 @@ export default function AssessmentPage() {
             setCareer(storedCareer);
 
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 45000);
+
                 const response = await fetch("/api/assessment/generate", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ career: storedCareer }),
+                    signal: controller.signal,
                 });
+
+                clearTimeout(timeoutId);
 
                 if (!response.ok) {
                     throw new Error("Failed to generate questions");
@@ -80,9 +86,18 @@ export default function AssessmentPage() {
                     ...q,
                     options: Array.isArray(q.options) ? q.options : [],
                 })).filter((q: Question) => q.options.length > 0);
+
+                if (validatedQuestions.length === 0) {
+                    throw new Error("No valid questions were generated");
+                }
+
                 setQuestions(validatedQuestions);
-            } catch (error) {
-                toast.error("Failed to load assessment. Please try again.");
+            } catch (error: unknown) {
+                if (error instanceof Error && error.name === "AbortError") {
+                    toast.error("Question generation timed out. Please try again.");
+                } else {
+                    toast.error("Failed to load assessment. Please try again.");
+                }
                 router.push("/onboarding/career");
             } finally {
                 setLoading(false);

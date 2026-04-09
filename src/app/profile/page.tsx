@@ -572,9 +572,9 @@ export default function ProfilePage() {
                                 exit={{ scale: 0.9, opacity: 0 }}
                                 onClick={(e) => e.stopPropagation()}
                             >
-                                <Card className="p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto">
-                                    <div className="flex items-center justify-between mb-6">
-                                        <h2 className="text-xl font-bold">Edit Profile</h2>
+                                <Card className="w-[min(96vw,1280px)] max-h-[92vh] overflow-hidden border-white/10 shadow-2xl">
+                                    <div className="flex items-center justify-between px-8 py-5 border-b border-border/70 bg-background/95 backdrop-blur-sm">
+                                        <h2 className="text-3xl font-bold tracking-tight">Edit Profile</h2>
                                         <Button
                                             variant="ghost"
                                             size="icon"
@@ -583,9 +583,10 @@ export default function ProfilePage() {
                                             <X className="h-4 w-4" />
                                         </Button>
                                     </div>
-                                    <div className="space-y-6">
+                                    <div className="px-8 py-6 max-h-[calc(92vh-80px)] overflow-y-auto">
+                                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                                         {/* Personal Information */}
-                                        <div>
+                                        <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-5">
                                             <h3 className="text-sm font-semibold text-violet-600 mb-3 flex items-center gap-2">
                                                 <User className="h-4 w-4" />
                                                 Personal Information
@@ -619,7 +620,7 @@ export default function ProfilePage() {
                                         </div>
 
                                         {/* Contact Information */}
-                                        <div>
+                                        <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-5">
                                             <h3 className="text-sm font-semibold text-blue-600 mb-3 flex items-center gap-2">
                                                 <Phone className="h-4 w-4" />
                                                 Contact Information
@@ -646,7 +647,7 @@ export default function ProfilePage() {
                                         </div>
 
                                         {/* Academic Information */}
-                                        <div>
+                                        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-5">
                                             <h3 className="text-sm font-semibold text-emerald-600 mb-3 flex items-center gap-2">
                                                 <GraduationCap className="h-4 w-4" />
                                                 Academic Information
@@ -705,7 +706,7 @@ export default function ProfilePage() {
                                         </div>
 
                                         {/* Family Information */}
-                                        <div>
+                                        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-5 xl:col-span-2">
                                             <h3 className="text-sm font-semibold text-amber-600 mb-3">
                                                 👨‍👩‍👧 Family Information <span className="text-muted-foreground text-xs font-normal">(All Optional)</span>
                                             </h3>
@@ -763,8 +764,10 @@ export default function ProfilePage() {
                                             </div>
                                         </div>
 
+                                        </div>
+
                                         {/* Action Buttons */}
-                                        <div className="flex gap-2 pt-4 border-t">
+                                        <div className="sticky bottom-0 z-10 flex gap-3 pt-5 mt-6 border-t border-border/70 bg-background/95 backdrop-blur-sm">
                                             <Button
                                                 variant="outline"
                                                 className="flex-1"

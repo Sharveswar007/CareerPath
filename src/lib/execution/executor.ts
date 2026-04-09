@@ -138,10 +138,80 @@ import sys
 
 # Parse test input
 _test_input_raw = '${escapedInput}'
-try:
-    _test_input = json.loads(_test_input_raw)
-except:
-    _test_input = _test_input_raw
+
+def _parse_args(raw_input):
+    raw_input = (raw_input or "").strip()
+    if not raw_input:
+        return []
+
+    try:
+        parsed = json.loads(raw_input)
+        if isinstance(parsed, (list, tuple)):
+            return list(parsed)
+        return [parsed]
+    except Exception:
+        pass
+
+    args = []
+    current = []
+    depth = 0
+    quote = None
+    escape = False
+
+    for char in raw_input:
+        if escape:
+            current.append(char)
+            escape = False
+            continue
+
+        if char == "\\":
+            current.append(char)
+            escape = True
+            continue
+
+        if quote:
+            current.append(char)
+            if char == quote:
+                quote = None
+            continue
+
+        if char in ("'", '"'):
+            current.append(char)
+            quote = char
+            continue
+
+        if char in "([{":
+            depth += 1
+            current.append(char)
+            continue
+
+        if char in ")]}":
+            depth = max(0, depth - 1)
+            current.append(char)
+            continue
+
+        if char == "," and depth == 0:
+            arg = "".join(current).strip()
+            if arg:
+                try:
+                    args.append(json.loads(arg))
+                except Exception:
+                    args.append(arg)
+            current = []
+            continue
+
+        current.append(char)
+
+    arg = "".join(current).strip()
+    if arg:
+        try:
+            args.append(json.loads(arg))
+        except Exception:
+            args.append(arg)
+
+    return args
+
+_test_args = _parse_args(_test_input_raw)
 
 # Get functions before user code
 _before = set(dir())
@@ -158,17 +228,15 @@ _new_funcs = [n for n in (_after - _before) if callable(eval(n)) and not n.start
 if _new_funcs:
     _func = eval(_new_funcs[0])
     try:
-        _result = _func(_test_input)
+        if len(_test_args) == 0:
+            _result = _func()
+        elif len(_test_args) == 1:
+            _result = _func(_test_args[0])
+        else:
+            _result = _func(*_test_args)
         print(_result)
     except TypeError:
-        if isinstance(_test_input, (list, tuple)):
-            try:
-                _result = _func(*_test_input)
-                print(_result)
-            except Exception as e:
-                print(f"Error: {e}", file=sys.stderr)
-        else:
-            print(f"Error calling function", file=sys.stderr)
+        print(f"Error calling function", file=sys.stderr)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
 `;
@@ -181,11 +249,97 @@ function wrapJavaScriptCode(code: string, testInput: string): string {
     return `
 // Parse test input
 let _testInput;
+let _testArgs = [];
+
+function _parseArgs(rawInput) {
+    const value = String(rawInput || "").trim();
+    if (!value) return [];
+
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+        // Fall through to comma-aware parsing
+    }
+
+    const args = [];
+    let current = "";
+    let depth = 0;
+    let quote = null;
+    let escape = false;
+
+    for (const char of value) {
+        if (escape) {
+            current += char;
+            escape = false;
+            continue;
+        }
+
+        if (char === "\\") {
+            current += char;
+            escape = true;
+            continue;
+        }
+
+        if (quote) {
+            current += char;
+            if (char === quote) quote = null;
+            continue;
+        }
+
+        if (char === '"' || char === "'") {
+            current += char;
+            quote = char;
+            continue;
+        }
+
+        if (char === "[" || char === "{" || char === "(") {
+            depth += 1;
+            current += char;
+            continue;
+        }
+
+        if (char === "]" || char === "}" || char === ")") {
+            depth = Math.max(0, depth - 1);
+            current += char;
+            continue;
+        }
+
+        if (char === "," && depth === 0) {
+            const token = current.trim();
+            if (token) {
+                try {
+                    args.push(JSON.parse(token));
+                } catch {
+                    args.push(token);
+                }
+            }
+            current = "";
+            continue;
+        }
+
+        current += char;
+    }
+
+    const token = current.trim();
+    if (token) {
+        try {
+            args.push(JSON.parse(token));
+        } catch {
+            args.push(token);
+        }
+    }
+
+    return args;
+}
+
 try {
     _testInput = JSON.parse('${escapedInput}');
 } catch {
     _testInput = '${escapedInput}';
 }
+
+_testArgs = _parseArgs('${escapedInput}');
 
 // User code
 ${code}
@@ -197,7 +351,11 @@ if (_funcMatch) {
     try {
         const _fn = eval(_funcName);
         if (typeof _fn === 'function') {
-            const _result = _fn(_testInput);
+            const _result = _testArgs.length > 1
+                ? _fn(..._testArgs)
+                : _testArgs.length === 1
+                    ? _fn(_testArgs[0])
+                    : _fn();
             console.log(typeof _result === 'object' ? JSON.stringify(_result) : _result);
         }
     } catch(e) {

@@ -74,6 +74,7 @@ export default function ResumePage() {
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
     const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
     const [file, setFile] = useState<File | null>(null);
+    const [savedToProfile, setSavedToProfile] = useState(false);
 
     const onDrop = useCallback((acceptedFiles: File[]) => {
         const uploadedFile = acceptedFiles[0];
@@ -109,6 +110,41 @@ export default function ResumePage() {
         maxFiles: 1,
         maxSize: 10 * 1024 * 1024, // 10MB
     });
+
+    const saveAnalysisToProfile = async (result: AnalysisResult): Promise<boolean> => {
+        setIsSaving(true);
+        try {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (!user) {
+                toast.error("Please sign in to save your analysis");
+                return false;
+            }
+
+            const { error } = await supabase
+                .from("resume_analyses")
+                .insert({
+                    user_id: user.id,
+                    file_name: result._metadata?.fileName || uploadedFileName || "resume.txt",
+                    analysis_result: result,
+                    ats_score: result.atsScore ?? result.overallScore,
+                    suggestions: {
+                        missingKeywords: result.missingKeywords,
+                        formatIssues: result.formatIssues,
+                        recommendations: result.recommendations,
+                    },
+                });
+
+            if (error) throw error;
+            return true;
+        } catch (err) {
+            console.error("Save error:", err);
+            return false;
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     const analyzeResume = async () => {
         if ((!resumeText.trim() && !file) || isAnalyzing) return;
@@ -150,7 +186,15 @@ export default function ResumePage() {
 
             const result = await response.json();
             setAnalysisResult(result);
-            toast.success("Resume analyzed successfully!");
+            setSavedToProfile(false);
+
+            const saved = await saveAnalysisToProfile(result);
+            if (saved) {
+                setSavedToProfile(true);
+                toast.success("Resume analyzed and saved to profile!");
+            } else {
+                toast.success("Resume analyzed successfully! You can still save manually.");
+            }
         } catch (error: any) {
             console.error("Error analyzing resume:", error);
             toast.error(error.message || "Failed to analyze resume. Please try again.");
@@ -481,44 +525,22 @@ ${analysisResult.recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
                                 disabled={isSaving}
                                 onClick={async () => {
                                     if (!analysisResult) return;
-                                    setIsSaving(true);
-                                    try {
-                                        const supabase = createClient();
-                                        const { data: { user } } = await supabase.auth.getUser();
-                                        
-                                        if (!user) {
-                                            toast.error("Please sign in to save your analysis");
-                                            return;
-                                        }
-
-                                        const { error } = await supabase
-                                            .from("resume_analyses")
-                                            .insert({
-                                                user_id: user.id,
-                                                file_name: analysisResult._metadata?.fileName || uploadedFileName || "resume.txt",
-                                                analysis_result: analysisResult,
-                                                ats_score: analysisResult.atsScore || analysisResult.overallScore,
-                                                suggestions: {
-                                                    missingKeywords: analysisResult.missingKeywords,
-                                                    formatIssues: analysisResult.formatIssues,
-                                                    recommendations: analysisResult.recommendations,
-                                                },
-                                            });
-
-                                        if (error) throw error;
+                                    const saved = await saveAnalysisToProfile(analysisResult);
+                                    if (saved) {
+                                        setSavedToProfile(true);
                                         toast.success("Resume analysis saved to profile!");
-                                    } catch (err) {
-                                        console.error("Save error:", err);
+                                    } else {
                                         toast.error("Failed to save. Please try again.");
-                                    } finally {
-                                        setIsSaving(false);
                                     }
                                 }}
                             >
                                 {isSaving ? (
                                     <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
                                 ) : (
-                                    <><CheckCircle className="h-4 w-4 mr-2" />Save to Profile</>
+                                    <>
+                                        <CheckCircle className="h-4 w-4 mr-2" />
+                                        {savedToProfile ? "Saved to Profile" : "Save to Profile"}
+                                    </>
                                 )}
                             </Button>
                         </motion.div>

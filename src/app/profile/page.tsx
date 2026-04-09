@@ -266,7 +266,11 @@ export default function ProfilePage() {
             if (resumesRes.data) {
                 setResumesAnalyzed(resumesRes.data.length);
                 // Get latest ATS score
-                if (resumesRes.data.length > 0 && resumesRes.data[0].ats_score) {
+                if (
+                    resumesRes.data.length > 0
+                    && resumesRes.data[0].ats_score !== null
+                    && resumesRes.data[0].ats_score !== undefined
+                ) {
                     setLatestAtsScore(resumesRes.data[0].ats_score);
                 }
             }

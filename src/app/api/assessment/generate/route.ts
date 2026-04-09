@@ -26,6 +26,14 @@ interface AssessmentQuestionPayload {
     questions: GeneratedQuestion[];
 }
 
+type FinalCategory = "career_knowledge" | "aptitude" | "situation";
+
+interface CategoryTargets {
+    career_knowledge: number;
+    aptitude: number;
+    situation: number;
+}
+
 const CAREER_SUBTOPICS: Record<string, string[]> = {
     "Data Scientist": ["Machine Learning", "Statistics", "Python/R", "Data Visualization", "Deep Learning", "NLP", "Big Data", "SQL", "A/B Testing", "Feature Engineering"],
     "Software Engineer": ["System Design", "Algorithms", "Data Structures", "OOP", "Databases", "APIs", "Git", "Testing", "Cloud Services", "Security"],
@@ -120,6 +128,84 @@ function generateFallbackQuestions(career: string, questionCount: number): Gener
     return questions.sort(() => Math.random() - 0.5);
 }
 
+function getTargetCounts(totalQuestions: number): CategoryTargets {
+    const careerCount = Math.ceil(totalQuestions * 0.5);
+    const aptitudeCount = Math.ceil(totalQuestions * 0.3);
+    const situationCount = totalQuestions - careerCount - aptitudeCount;
+
+    return {
+        career_knowledge: careerCount,
+        aptitude: aptitudeCount,
+        situation: situationCount,
+    };
+}
+
+function normalizeCategory(category: GeneratedQuestion["category"] | undefined): FinalCategory {
+    if (category === "aptitude") return "aptitude";
+    if (category === "situation") return "situation";
+    return "career_knowledge";
+}
+
+function getCategoryCounts(questions: GeneratedQuestion[]): CategoryTargets {
+    return {
+        career_knowledge: questions.filter((question) => question.category === "career_knowledge").length,
+        aptitude: questions.filter((question) => question.category === "aptitude").length,
+        situation: questions.filter((question) => question.category === "situation").length,
+    };
+}
+
+function enforceCategoryDistribution(career: string, questions: GeneratedQuestion[], totalQuestions: number): GeneratedQuestion[] {
+    const targets = getTargetCounts(totalQuestions);
+
+    const sanitized = questions.map((question) => ({
+        ...question,
+        category: normalizeCategory(question.category),
+    }));
+
+    const fallbackPool = generateFallbackQuestions(career, totalQuestions).map((question) => ({
+        ...question,
+        category: normalizeCategory(question.category),
+    }));
+
+    const bucket = {
+        career_knowledge: sanitized.filter((question) => question.category === "career_knowledge"),
+        aptitude: sanitized.filter((question) => question.category === "aptitude"),
+        situation: sanitized.filter((question) => question.category === "situation"),
+    };
+
+    const fallbackBucket = {
+        career_knowledge: fallbackPool.filter((question) => question.category === "career_knowledge"),
+        aptitude: fallbackPool.filter((question) => question.category === "aptitude"),
+        situation: fallbackPool.filter((question) => question.category === "situation"),
+    };
+
+    const selected: GeneratedQuestion[] = [];
+    const categories: FinalCategory[] = ["career_knowledge", "aptitude", "situation"];
+
+    for (const category of categories) {
+        const target = targets[category];
+        const fromPrimary = bucket[category].slice(0, target);
+        selected.push(...fromPrimary);
+
+        const remaining = target - fromPrimary.length;
+        if (remaining > 0) {
+            selected.push(...fallbackBucket[category].slice(0, remaining));
+        }
+    }
+
+    if (selected.length < totalQuestions) {
+        const remainingPrimary = sanitized.filter((question) => !selected.includes(question));
+        selected.push(...remainingPrimary.slice(0, totalQuestions - selected.length));
+    }
+
+    if (selected.length < totalQuestions) {
+        const remainingFallback = fallbackPool.filter((question) => !selected.includes(question));
+        selected.push(...remainingFallback.slice(0, totalQuestions - selected.length));
+    }
+
+    return selected.slice(0, totalQuestions).sort(() => Math.random() - 0.5);
+}
+
 function normalizeQuestions(rawQuestions: unknown, prefix: string): GeneratedQuestion[] {
     if (!Array.isArray(rawQuestions)) return [];
 
@@ -140,9 +226,7 @@ function normalizeQuestions(rawQuestions: unknown, prefix: string): GeneratedQue
 
             return {
                 id: candidate.id && typeof candidate.id === "string" ? candidate.id : `${prefix}${index + 1}`,
-                category: candidate.category && ["career_knowledge", "technical", "aptitude", "personality", "situation"].includes(candidate.category)
-                    ? candidate.category
-                    : "career_knowledge",
+                category: normalizeCategory(candidate.category),
                 type: "multiple_choice",
                 question: candidate.question,
                 options,
@@ -288,7 +372,16 @@ No markdown. No extra keys.`;
 }
 
 function hasEnoughQuestions(questions: GeneratedQuestion[], expectedCount: number): boolean {
-    return questions.length >= expectedCount && questions.every((question) => question.options.length === 4);
+    const targets = getTargetCounts(expectedCount);
+    const counts = getCategoryCounts(questions);
+
+    return (
+        questions.length >= expectedCount
+        && questions.every((question) => question.options.length === 4)
+        && counts.career_knowledge >= targets.career_knowledge
+        && counts.aptitude >= targets.aptitude
+        && counts.situation >= targets.situation
+    );
 }
 
 async function generateQuestionSet(
@@ -354,8 +447,15 @@ export async function POST(request: NextRequest) {
             finalQuestions = [...firstBatch, ...secondBatch];
         }
 
-        if (!hasEnoughQuestions(finalQuestions, 1)) {
+        if (!hasEnoughQuestions(finalQuestions, normalizedCount)) {
             finalQuestions = generateFallbackQuestions(career, normalizedCount);
+            usedFallback = true;
+        }
+
+        finalQuestions = enforceCategoryDistribution(career, finalQuestions, normalizedCount);
+
+        if (!hasEnoughQuestions(finalQuestions, normalizedCount)) {
+            finalQuestions = enforceCategoryDistribution(career, generateFallbackQuestions(career, normalizedCount), normalizedCount);
             usedFallback = true;
         }
 

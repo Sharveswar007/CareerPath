@@ -14,11 +14,19 @@ jobs:
       - name: Ping Supabase REST API
         run: |
           echo "Pinging Supabase REST API to keep the project active..."
-          response=$(curl -s -o /dev/null -w "%{http_code}" -H "apikey: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/")
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
+            "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/")
           
           if [ "$response" -eq 200 ]; then
             echo "Ping successful! Status code: $response"
           else
             echo "Ping failed. Status code: $response"
+            echo "Error response from Supabase:"
+            curl -s \
+              -H "apikey: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
+              -H "Authorization: Bearer ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
+              "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/rest/v1/"
             exit 1
           fi

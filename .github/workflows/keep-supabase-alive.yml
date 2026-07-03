@@ -15,6 +15,7 @@ jobs:
         run: |
           echo "Pinging Supabase to keep the project active..."
           response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "apikey: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
             "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/auth/v1/health")
           
           # 200 is success. 
@@ -23,6 +24,8 @@ jobs:
           else
             echo "Ping failed. Status code: $response"
             echo "Error response from Supabase:"
-            curl -s "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/auth/v1/health"
+            curl -s \
+              -H "apikey: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
+              "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}/auth/v1/health"
             exit 1
           fi

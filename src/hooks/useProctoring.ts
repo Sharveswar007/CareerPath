@@ -11,31 +11,41 @@ interface UseProctoringOptions {
 export function useProctoring({ onViolation, maxViolations = 3, enabled = true }: UseProctoringOptions) {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [violations, setViolations] = useState(0);
+    
+    // Use refs for everything that event handlers need — avoids stale closures entirely
     const violationsRef = useRef(0);
     const isLockedOut = useRef(false);
+    const enabledRef = useRef(enabled);
+    const isFullscreenRef = useRef(false);
+    const onViolationRef = useRef(onViolation);
+    const maxViolationsRef = useRef(maxViolations);
+
+    // Keep refs in sync with props — no effect re-runs needed
+    useEffect(() => { enabledRef.current = enabled; }, [enabled]);
+    useEffect(() => { onViolationRef.current = onViolation; }, [onViolation]);
+    useEffect(() => { maxViolationsRef.current = maxViolations; }, [maxViolations]);
 
     const triggerViolation = useCallback((reason: string) => {
-        if (!enabled) return;
-        // Once locked out, stop counting entirely
+        if (!enabledRef.current) return;
         if (isLockedOut.current) return;
         
         violationsRef.current += 1;
         const newCount = violationsRef.current;
 
-        // If this violation hits the max, lock out immediately before calling onViolation
-        if (newCount >= maxViolations) {
+        if (newCount >= maxViolationsRef.current) {
             isLockedOut.current = true;
         }
 
         setViolations(newCount);
-        onViolation(newCount, reason);
-    }, [enabled, onViolation, maxViolations]);
+        onViolationRef.current(newCount, reason);
+    }, []); // No dependencies — everything is read from refs
 
     const requestFullscreen = useCallback(async () => {
         try {
             if (document.documentElement.requestFullscreen) {
                 await document.documentElement.requestFullscreen();
                 setIsFullscreen(true);
+                isFullscreenRef.current = true;
             }
         } catch (err) {
             console.error("Error attempting to enable fullscreen:", err);
@@ -48,76 +58,67 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
                 await document.exitFullscreen();
             }
             setIsFullscreen(false);
+            isFullscreenRef.current = false;
         } catch (err) {
             console.error("Error attempting to exit fullscreen:", err);
         }
     }, []);
 
+    // Single effect that registers listeners ONCE and never re-registers
     useEffect(() => {
         if (!enabled) return;
 
-        // 1. Fullscreen Change Detection
         const handleFullscreenChange = () => {
             const isCurrentlyFullscreen = !!document.fullscreenElement;
             
-            // If they were in fullscreen (or we expected them to be) and they exited
-            if (!isCurrentlyFullscreen && isFullscreen) {
+            if (!isCurrentlyFullscreen && isFullscreenRef.current) {
                 triggerViolation("Exited full screen");
             }
             setIsFullscreen(isCurrentlyFullscreen);
+            isFullscreenRef.current = isCurrentlyFullscreen;
         };
 
-        // 2. Tab Switching / Minimizing (Visibility API)
         const handleVisibilityChange = () => {
-            if (document.visibilityState === "hidden" && enabled) {
+            if (document.visibilityState === "hidden" && enabledRef.current) {
                 triggerViolation("Switched tabs or minimized browser");
             }
         };
 
-        // 3. Window Blur (Clicking outside the browser or opening another app)
         const handleBlur = () => {
-            if (enabled) {
+            if (enabledRef.current) {
                 triggerViolation("Window lost focus (opened another app)");
             }
         };
 
-        // 4. Disable Context Menu (Right Click)
         const handleContextMenu = (e: MouseEvent) => {
-            if (enabled) {
+            if (enabledRef.current) {
                 e.preventDefault();
             }
         };
 
-        // 5. Disable Copy/Cut/Paste
         const handleClipboard = (e: ClipboardEvent) => {
-            if (enabled) {
+            if (enabledRef.current) {
                 e.preventDefault();
             }
         };
 
-        // 6. Disable specific keyboard shortcuts
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (!enabled) return;
+            if (!enabledRef.current) return;
 
-            // Prevent F12, Ctrl+Shift+I (DevTools)
             if (e.key === "F12" || (e.ctrlKey && e.shiftKey && e.key === "I")) {
                 e.preventDefault();
             }
-            // Prevent Ctrl+C, Ctrl+V, Ctrl+X
             if (e.ctrlKey && (e.key === "c" || e.key === "v" || e.key === "x" || e.key === "C" || e.key === "V" || e.key === "X")) {
                 e.preventDefault();
             }
-            // Prevent Alt+Tab (can't completely prevent, but we can prevent default behavior on page)
             if (e.altKey && e.key === "Tab") {
                 e.preventDefault();
             }
-            // Prevent Print Screen
             if (e.key === "PrintScreen") {
                 e.preventDefault();
             }
         };
 
-        // Attach listeners
         document.addEventListener("fullscreenchange", handleFullscreenChange);
         document.addEventListener("visibilitychange", handleVisibilityChange);
         window.addEventListener("blur", handleBlur);
@@ -128,7 +129,6 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
         document.addEventListener("keydown", handleKeyDown);
 
         return () => {
-            // Cleanup
             document.removeEventListener("fullscreenchange", handleFullscreenChange);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             window.removeEventListener("blur", handleBlur);
@@ -138,7 +138,8 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
             document.removeEventListener("paste", handleClipboard);
             document.removeEventListener("keydown", handleKeyDown);
         };
-    }, [enabled, isFullscreen, triggerViolation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [enabled]); // Only re-run when enabled changes
 
     return {
         isFullscreen,

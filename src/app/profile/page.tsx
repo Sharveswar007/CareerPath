@@ -242,7 +242,7 @@ export default function ProfilePage() {
                     .from("user_assessments")
                     .select("id")
                     .eq("user_id", user.id),
-                supabase
+                (supabase as any)
                     .from("proctoring_violations")
                     .select("*")
                     .eq("user_id", user.id)

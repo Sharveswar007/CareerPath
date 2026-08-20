@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Google icon component
 const GoogleIcon = () => (
@@ -33,12 +35,16 @@ const GoogleIcon = () => (
 
 export default function LoginPage() {
     const [loading, setLoading] = useState(false);
+    const [isRegister, setIsRegister] = useState(false);
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [fullName, setFullName] = useState("");
+
     const router = useRouter();
     const supabase = createClient();
 
     const handleGoogleLogin = async () => {
         setLoading(true);
-
         try {
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: "google",
@@ -46,11 +52,51 @@ export default function LoginPage() {
                     redirectTo: `${location.origin}/auth/callback`,
                 },
             });
-
             if (error) throw error;
-            // Redirect happens automatically
         } catch (error: any) {
             toast.error(error.message || "Failed to sign in with Google");
+            setLoading(false);
+        }
+    };
+
+    const handleEmailAuth = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+
+        try {
+            if (isRegister) {
+                // Register
+                const { error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: {
+                            full_name: fullName,
+                        },
+                        emailRedirectTo: `${location.origin}/auth/callback`,
+                    },
+                });
+
+                if (error) throw error;
+                
+                toast.success("Registration successful! You can now sign in.");
+                setIsRegister(false); // Switch to login view
+            } else {
+                // Login
+                const { error } = await supabase.auth.signInWithPassword({
+                    email,
+                    password,
+                });
+
+                if (error) throw error;
+
+                toast.success("Signed in successfully!");
+                router.push("/dashboard"); // Or wherever your post-login route is
+                router.refresh();
+            }
+        } catch (error: any) {
+            toast.error(error.message || (isRegister ? "Failed to register" : "Failed to sign in"));
+        } finally {
             setLoading(false);
         }
     };
@@ -72,35 +118,112 @@ export default function LoginPage() {
                     </p>
                 </div>
 
-                <Card className="p-8 border-violet-500/20 shadow-xl">
+                <Card className="p-8 border-violet-500/20 shadow-xl overflow-hidden">
                     <div className="mb-6 text-center">
-                        <h2 className="text-xl font-semibold">Welcome</h2>
+                        <h2 className="text-xl font-semibold">
+                            {isRegister ? "Create an Account" : "Welcome Back"}
+                        </h2>
                         <p className="text-sm text-muted-foreground mt-1">
-                            Sign in to start your career journey
+                            {isRegister ? "Sign up to start your journey" : "Sign in to continue"}
                         </p>
                     </div>
 
+                    <form onSubmit={handleEmailAuth} className="space-y-4 mb-6">
+                        <AnimatePresence mode="wait">
+                            {isRegister && (
+                                <motion.div
+                                    key="name-field"
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: "auto" }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    className="space-y-2"
+                                >
+                                    <Label htmlFor="fullName">Full Name</Label>
+                                    <Input
+                                        id="fullName"
+                                        placeholder="John Doe"
+                                        value={fullName}
+                                        onChange={(e) => setFullName(e.target.value)}
+                                        required={isRegister}
+                                    />
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="email">Email</Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                placeholder="you@example.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="password">Password</Label>
+                            <Input
+                                id="password"
+                                type="password"
+                                placeholder="••••••••"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                                minLength={6}
+                            />
+                        </div>
+
+                        <Button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700"
+                        >
+                            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {isRegister ? "Sign Up" : "Sign In"}
+                        </Button>
+                    </form>
+
+                    <div className="relative mb-6">
+                        <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t border-muted" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-card px-2 text-muted-foreground">
+                                Or continue with
+                            </span>
+                        </div>
+                    </div>
+
                     <Button
+                        type="button"
                         onClick={handleGoogleLogin}
                         disabled={loading}
-                        className="w-full h-12 text-base bg-white hover:bg-gray-50 text-gray-800 border border-gray-300 shadow-sm"
+                        variant="outline"
+                        className="w-full h-10 text-sm bg-white hover:bg-gray-50 text-gray-800 border-gray-300"
                     >
                         {loading ? (
-                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
                             <GoogleIcon />
                         )}
-                        Continue with Google
+                        Google
                     </Button>
 
-                    <p className="text-xs text-center text-muted-foreground mt-6">
-                        By signing in, you agree to our Terms of Service and Privacy Policy
-                    </p>
+                    <div className="mt-6 text-center text-sm">
+                        <span className="text-muted-foreground">
+                            {isRegister ? "Already have an account?" : "Don't have an account?"}
+                        </span>{" "}
+                        <button
+                            type="button"
+                            onClick={() => setIsRegister(!isRegister)}
+                            className="font-medium text-indigo-500 hover:text-indigo-600 hover:underline"
+                        >
+                            {isRegister ? "Sign In" : "Sign Up"}
+                        </button>
+                    </div>
                 </Card>
-
-                <p className="text-center text-sm text-muted-foreground mt-6">
-                    Secure login powered by Google
-                </p>
             </motion.div>
         </div>
     );

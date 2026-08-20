@@ -84,6 +84,13 @@ interface GapAnalysisData {
     weaknesses: string[];
 }
 
+interface ProctoringViolation {
+    id: string;
+    assessment_type: string;
+    violation_reason: string;
+    created_at: string;
+}
+
 const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -161,6 +168,7 @@ export default function ProfilePage() {
     const [latestAtsScore, setLatestAtsScore] = useState<number | null>(null);
     const [totalAssessments, setTotalAssessments] = useState(0);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
+    const [violations, setViolations] = useState<ProctoringViolation[]>([]);
 
     const [editForm, setEditForm] = useState({
         full_name: "",
@@ -200,7 +208,7 @@ export default function ProfilePage() {
             setCurrentStreak(activityStats.currentStreak);
 
             // Load all data in parallel
-            const [profileRes, assessmentRes, gapRes, challengesRes, resumesRes, chatRes, allAssessmentsRes] = await Promise.all([
+            const [profileRes, assessmentRes, gapRes, challengesRes, resumesRes, chatRes, allAssessmentsRes, violationsRes] = await Promise.all([
                 supabase.from("profiles").select("*").eq("id", user.id).single(),
                 supabase
                     .from("user_assessments")
@@ -234,6 +242,11 @@ export default function ProfilePage() {
                     .from("user_assessments")
                     .select("id")
                     .eq("user_id", user.id),
+                supabase
+                    .from("proctoring_violations")
+                    .select("*")
+                    .eq("user_id", user.id)
+                    .order("created_at", { ascending: false }),
             ]);
 
             if (profileRes.data) {
@@ -276,6 +289,7 @@ export default function ProfilePage() {
             }
             if (chatRes.data) setChatSessions(chatRes.data.length);
             if (allAssessmentsRes.data) setTotalAssessments(allAssessmentsRes.data.length);
+            if (violationsRes && violationsRes.data) setViolations(violationsRes.data);
 
             setLoading(false);
         };
@@ -1040,6 +1054,32 @@ export default function ProfilePage() {
                         </Card>
                     </motion.div>
                 </div>
+
+                {/* Malpractice History */}
+                {violations.length > 0 && (
+                    <motion.div variants={itemVariants} className="mb-8">
+                        <h2 className="font-semibold mb-4 flex items-center gap-2 text-red-500">
+                            <Target className="h-5 w-5" />
+                            Proctoring Violations
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {violations.map((violation) => (
+                                <Card key={violation.id} className="p-4 border-red-500/30 bg-red-500/5">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <Badge variant="destructive" className="bg-red-500/20 text-red-600 hover:bg-red-500/30">
+                                            {violation.assessment_type === "onboarding" ? "Onboarding" : "Retest"}
+                                        </Badge>
+                                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                            <Calendar className="h-3 w-3" />
+                                            {new Date(violation.created_at).toLocaleString()}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm font-medium">{violation.violation_reason}</p>
+                                </Card>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
 
                 {/* Quick Actions */}
                 <motion.div variants={itemVariants}>

@@ -67,6 +67,7 @@ export default function AssessmentPage() {
     const [examStarted, setExamStarted] = useState(false);
     const [showProctorWarning, setShowProctorWarning] = useState(false);
     const [warningReason, setWarningReason] = useState("");
+    const [isKicked, setIsKicked] = useState(false);
     const MAX_VIOLATIONS = 3;
 
     // We must pass a stable reference or useCallback for onViolation
@@ -85,11 +86,35 @@ export default function AssessmentPage() {
 
     // Auto-submit if violations exceeded
     useEffect(() => {
-        if (violations >= MAX_VIOLATIONS && !submitting) {
-            toast.error("Maximum violations reached. Exam is being auto-submitted.");
-            exitFullscreen();
-            handleSubmit(); // Auto-submit
-        }
+        const handleKick = async () => {
+            if (violations >= MAX_VIOLATIONS && !submitting && !isKicked) {
+                setIsKicked(true);
+                toast.error("Maximum violations reached. You have been kicked from the assessment.", {
+                    duration: 5000,
+                });
+                exitFullscreen();
+                
+                try {
+                    await fetch("/api/proctoring/violation", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            assessment_type: "onboarding",
+                            violation_reason: "Exceeded 3 proctoring strikes",
+                        }),
+                    });
+                } catch (err) {
+                    console.error("Failed to log violation", err);
+                }
+
+                // Kick them to home screen after 3 seconds
+                setTimeout(() => {
+                    router.push("/");
+                }, 3000);
+            }
+        };
+
+        handleKick();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [violations]);
 
@@ -279,6 +304,24 @@ export default function AssessmentPage() {
 
     if (!currentQuestion) {
         return null;
+    }
+
+    if (isKicked) {
+        return (
+            <div className="min-h-screen bg-background py-12 px-4 flex items-center justify-center">
+                <Card className="p-8 border-2 border-red-500/50 shadow-2xl shadow-red-500/20 max-w-lg w-full text-center">
+                    <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+                    <h1 className="text-3xl font-bold text-red-500 mb-2">Assessment Terminated</h1>
+                    <p className="text-lg text-muted-foreground mb-6">
+                        You have exceeded the maximum number of proctoring violations.
+                        Your attempt has been recorded.
+                    </p>
+                    <p className="text-sm font-medium animate-pulse text-muted-foreground">
+                        Redirecting to home screen...
+                    </p>
+                </Card>
+            </div>
+        );
     }
 
     if (!examStarted) {

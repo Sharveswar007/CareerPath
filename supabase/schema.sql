@@ -263,3 +263,24 @@ create policy "Users can insert their own activity"
 create policy "Users can update their own activity"
   on public.user_activity for update
   using ( auth.uid() = user_id );
+
+-- =====================================================
+-- Proctoring Violations Table (Malpractice Tracking)
+-- =====================================================
+create table public.proctoring_violations (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  assessment_type text not null,
+  violation_reason text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.proctoring_violations enable row level security;
+
+create policy "Users can view their own violations"
+  on public.proctoring_violations for select
+  using ( auth.uid() = user_id );
+
+create policy "Users can insert their own violations"
+  on public.proctoring_violations for insert
+  with check ( auth.uid() = user_id );

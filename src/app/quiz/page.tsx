@@ -76,50 +76,38 @@ export default function AIQuizPage() {
 
     // We must pass a stable reference or useCallback for onViolation
     const handleViolation = (violationCount: number, reason: string) => {
+        if (isKicked) return;
+
         setWarningReason(reason);
         setShowProctorWarning(true);
         toast.error(`Violation ${violationCount}/${MAX_VIOLATIONS}: ${reason}`, {
             duration: 5000,
         });
+
+        if (violationCount >= MAX_VIOLATIONS) {
+            setIsKicked(true);
+            exitFullscreen();
+            
+            fetch("/api/proctoring/violation", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    assessment_type: "retest",
+                    violation_reason: "Exceeded 3 proctoring strikes",
+                }),
+            }).catch(err => console.error("Failed to log violation", err));
+
+            // Kick them to home screen after 3 seconds
+            setTimeout(() => {
+                router.push("/");
+            }, 3000);
+        }
     };
 
-    const { isFullscreen, violations, requestFullscreen, exitFullscreen } = useProctoring({
+    const { isFullscreen, requestFullscreen, exitFullscreen } = useProctoring({
         onViolation: handleViolation,
         enabled: examStarted && !showResults, // Only active during the exam
     });
-
-    // Auto-submit if violations exceeded
-    useEffect(() => {
-        const handleKick = async () => {
-            if (violations >= MAX_VIOLATIONS && !isSubmitting && !showResults && !isKicked) {
-                setIsKicked(true);
-                toast.error("Maximum violations reached. You have been kicked from the assessment.", {
-                    duration: 5000,
-                });
-                exitFullscreen();
-                
-                try {
-                    await fetch("/api/proctoring/violation", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            assessment_type: "retest",
-                            violation_reason: "Exceeded 3 proctoring strikes",
-                        }),
-                    });
-                } catch (err) {
-                    console.error("Failed to log violation", err);
-                }
-
-                // Kick them to home screen after 3 seconds
-                setTimeout(() => {
-                    router.push("/");
-                }, 3000);
-            }
-        };
-        handleKick();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [violations]);
 
     useEffect(() => {
         const loadQuestions = async () => {

@@ -295,28 +295,40 @@ function cleanGroqResponse(content: string): string {
     return content.replace(/```json\n?|\n?```/g, "").trim();
 }
 
-async function callGroq(prompt: string, maxTokens: number, timeoutMs: number): Promise<string> {
-    const response = await Promise.race([
-        groq.chat.completions.create({
-            model: "llama-3.1-8b-instant",
-            messages: [
-                {
-                    role: "system",
-                    content: "You are an expert interviewer and question writer. Return only valid JSON.",
-                },
-                {
-                    role: "user",
-                    content: prompt,
-                },
-            ],
-            temperature: 0.7,
-            max_tokens: maxTokens,
-            response_format: { type: "json_object" },
-        }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Groq request timed out")), timeoutMs)),
-    ]);
+async function callGroq(prompt: string, maxTokens: number, timeoutMs: number, maxRetries = 3): Promise<string> {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            const response = await Promise.race([
+                groq.chat.completions.create({
+                    model: "llama-3.1-8b-instant",
+                    messages: [
+                        {
+                            role: "system",
+                            content: "You are an expert interviewer and question writer. Return only valid JSON.",
+                        },
+                        {
+                            role: "user",
+                            content: prompt,
+                        },
+                    ],
+                    temperature: 0.7,
+                    max_tokens: maxTokens,
+                    response_format: { type: "json_object" },
+                }),
+                new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Groq request timed out")), timeoutMs)),
+            ]);
 
-    return response.choices[0]?.message?.content || "{}";
+            return response.choices[0]?.message?.content || "{}";
+        } catch (error: any) {
+            console.error(`Groq API error (attempt ${attempt + 1}/${maxRetries}):`, error.message);
+            if (attempt === maxRetries - 1) {
+                throw error;
+            }
+            // Wait 2 seconds before retrying
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+    }
+    return "{}";
 }
 
 function buildPrompt(career: string, counts: { career: number; aptitude: number; situation: number }, seed: number, label: string): string {
@@ -397,7 +409,14 @@ async function generateQuestionSet(
     const situationCount = questionCount - careerCount - aptitudeCount;
 
     const prompt = buildPrompt(career, { career: careerCount, aptitude: aptitudeCount, situation: situationCount }, seed, label);
-    const rawContent = await callGroq(prompt, maxTokens, timeoutMs);
+    let rawContent = "{}";
+    try {
+        rawContent = await callGroq(prompt, maxTokens, timeoutMs);
+    } catch (error) {
+        console.error(`Failed to generate ${label} questions via Groq:`, error);
+        return [];
+    }
+    
     const cleaned = cleanGroqResponse(rawContent);
 
     try {

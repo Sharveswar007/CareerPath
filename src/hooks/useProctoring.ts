@@ -8,19 +8,28 @@ interface UseProctoringOptions {
     enabled?: boolean;
 }
 
-export function useProctoring({ onViolation, enabled = true }: UseProctoringOptions) {
+export function useProctoring({ onViolation, maxViolations = 3, enabled = true }: UseProctoringOptions) {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [violations, setViolations] = useState(0);
+    const violationsRef = useRef(0);
+    const isLockedOut = useRef(false);
 
     const triggerViolation = useCallback((reason: string) => {
         if (!enabled) return;
+        // Once locked out, stop counting entirely
+        if (isLockedOut.current) return;
         
-        setViolations((prev) => {
-            const newCount = prev + 1;
-            onViolation(newCount, reason);
-            return newCount;
-        });
-    }, [enabled, onViolation]);
+        violationsRef.current += 1;
+        const newCount = violationsRef.current;
+
+        // If this violation hits the max, lock out immediately before calling onViolation
+        if (newCount >= maxViolations) {
+            isLockedOut.current = true;
+        }
+
+        setViolations(newCount);
+        onViolation(newCount, reason);
+    }, [enabled, onViolation, maxViolations]);
 
     const requestFullscreen = useCallback(async () => {
         try {

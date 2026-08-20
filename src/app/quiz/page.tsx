@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     ChevronLeft,
@@ -72,20 +72,19 @@ export default function AIQuizPage() {
     const [showProctorWarning, setShowProctorWarning] = useState(false);
     const [warningReason, setWarningReason] = useState("");
     const [isKicked, setIsKicked] = useState(false);
+    const isKickedRef = useRef(false);
     const MAX_VIOLATIONS = 3;
 
     // We must pass a stable reference or useCallback for onViolation
     const handleViolation = (violationCount: number, reason: string) => {
-        if (isKicked) return;
-
-        setWarningReason(reason);
-        setShowProctorWarning(true);
-        toast.error(`Violation ${violationCount}/${MAX_VIOLATIONS}: ${reason}`, {
-            duration: 5000,
-        });
+        // Use ref to check — state may be stale in closures
+        if (isKickedRef.current) return;
 
         if (violationCount >= MAX_VIOLATIONS) {
+            // KICK: set ref immediately so no more violations can fire
+            isKickedRef.current = true;
             setIsKicked(true);
+            setShowProctorWarning(false); // Hide the warning modal
             exitFullscreen();
             
             fetch("/api/proctoring/violation", {
@@ -93,7 +92,7 @@ export default function AIQuizPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     assessment_type: "retest",
-                    violation_reason: "Exceeded 3 proctoring strikes",
+                    violation_reason: `Exceeded ${MAX_VIOLATIONS} proctoring strikes`,
                 }),
             }).catch(err => console.error("Failed to log violation", err));
 
@@ -101,12 +100,21 @@ export default function AIQuizPage() {
             setTimeout(() => {
                 router.push("/");
             }, 3000);
+            return;
         }
+
+        // Only show warning modal for strikes under the limit
+        setWarningReason(reason);
+        setShowProctorWarning(true);
+        toast.error(`Violation ${violationCount}/${MAX_VIOLATIONS}: ${reason}`, {
+            duration: 5000,
+        });
     };
 
-    const { isFullscreen, requestFullscreen, exitFullscreen } = useProctoring({
+    const { isFullscreen, violations, requestFullscreen, exitFullscreen } = useProctoring({
         onViolation: handleViolation,
-        enabled: examStarted && !showResults, // Only active during the exam
+        maxViolations: MAX_VIOLATIONS,
+        enabled: examStarted && !showResults && !isKicked, // Disable proctoring once kicked
     });
 
     useEffect(() => {

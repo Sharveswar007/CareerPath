@@ -80,9 +80,6 @@ export default function AIQuizPage() {
         toast.error(`Violation ${violationCount}/${MAX_VIOLATIONS}: ${reason}`, {
             duration: 5000,
         });
-
-        // Hide warning modal after a few seconds if they haven't exceeded
-        setTimeout(() => setShowProctorWarning(false), 3000);
     };
 
     const { isFullscreen, violations, requestFullscreen, exitFullscreen } = useProctoring({

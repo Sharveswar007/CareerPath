@@ -14,12 +14,16 @@ import {
     CheckCircle2,
     Target,
     Sparkles,
+    AlertTriangle,
+    Lock,
 } from "lucide-react";
+import { useProctoring } from "@/hooks/useProctoring";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -58,6 +62,39 @@ export default function AssessmentPage() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [phase, setPhase] = useState<"career_knowledge" | "aptitude" | "situation">("career_knowledge");
+
+    // Proctoring State
+    const [examStarted, setExamStarted] = useState(false);
+    const [showProctorWarning, setShowProctorWarning] = useState(false);
+    const [warningReason, setWarningReason] = useState("");
+    const MAX_VIOLATIONS = 3;
+
+    // We must pass a stable reference or useCallback for onViolation
+    const handleViolation = (violationCount: number, reason: string) => {
+        setWarningReason(reason);
+        setShowProctorWarning(true);
+        toast.error(`Violation ${violationCount}/${MAX_VIOLATIONS}: ${reason}`, {
+            duration: 5000,
+        });
+
+        // Hide warning modal after a few seconds if they haven't exceeded
+        setTimeout(() => setShowProctorWarning(false), 3000);
+    };
+
+    const { isFullscreen, violations, requestFullscreen, exitFullscreen } = useProctoring({
+        onViolation: handleViolation,
+        enabled: examStarted, // Only active during the exam
+    });
+
+    // Auto-submit if violations exceeded
+    useEffect(() => {
+        if (violations >= MAX_VIOLATIONS && !submitting) {
+            toast.error("Maximum violations reached. Exam is being auto-submitted.");
+            exitFullscreen();
+            handleSubmit(); // Auto-submit
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [violations]);
 
     useEffect(() => {
         const initAssessment = async () => {
@@ -218,6 +255,8 @@ export default function AssessmentPage() {
             sessionStorage.setItem("assessment_result", JSON.stringify(result));
             sessionStorage.removeItem("selected_career");
 
+            exitFullscreen(); // Exiting fullscreen cleanly
+
             toast.success("Assessment completed successfully!");
             router.push("/skills");
         } catch (error) {
@@ -245,14 +284,104 @@ export default function AssessmentPage() {
         return null;
     }
 
+    if (!examStarted) {
+        return (
+            <div className="min-h-screen bg-background py-12 px-4 flex items-center justify-center">
+                <Card className="p-8 border-2 border-violet-200 max-w-2xl w-full">
+                    <div className="text-center mb-6">
+                        <div className="mx-auto w-16 h-16 bg-violet-100 rounded-full flex items-center justify-center mb-4">
+                            <Lock className="h-8 w-8 text-violet-600" />
+                        </div>
+                        <h1 className="text-3xl font-bold mb-2">Proctored Assessment</h1>
+                        <p className="text-muted-foreground">
+                            This is a secure testing environment. Please read the instructions below before starting.
+                        </p>
+                    </div>
+
+                    <div className="space-y-4 mb-8 bg-muted/50 p-6 rounded-lg">
+                        <div className="flex gap-3">
+                            <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                            <div>
+                                <h3 className="font-semibold text-sm">Strict Environment Rules</h3>
+                                <ul className="text-sm text-muted-foreground list-disc list-inside mt-2 space-y-1">
+                                    <li>The exam will run in <b>Full Screen Mode</b>.</li>
+                                    <li><b>Do not switch tabs</b> or open other applications.</li>
+                                    <li><b>Copy/Paste and Right-Click</b> are disabled.</li>
+                                    <li>If you exit full screen or lose focus, you will receive a strike.</li>
+                                    <li><b>{MAX_VIOLATIONS} strikes</b> will result in automatic submission.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <Button 
+                        size="lg" 
+                        className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-lg py-6"
+                        onClick={() => {
+                            requestFullscreen();
+                            setExamStarted(true);
+                        }}
+                    >
+                        I understand, start exam
+                    </Button>
+                </Card>
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-background py-8 px-4">
+            <AnimatePresence>
+                {showProctorWarning && (
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            className="bg-background p-8 rounded-xl max-w-md w-full text-center border border-red-500/50 shadow-2xl shadow-red-500/20"
+                        >
+                            <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+                            <h2 className="text-2xl font-bold text-red-500 mb-2">Warning!</h2>
+                            <p className="text-lg mb-4">{warningReason}</p>
+                            <div className="text-3xl font-black mb-6">
+                                Strike {violations} / {MAX_VIOLATIONS}
+                            </div>
+                            <Button 
+                                variant="destructive" 
+                                className="w-full"
+                                onClick={() => {
+                                    setShowProctorWarning(false);
+                                    if (!isFullscreen) requestFullscreen();
+                                }}
+                            >
+                                Resume Exam
+                            </Button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <div className="max-w-3xl mx-auto">
                 <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-center mb-6"
+                    className="text-center mb-6 relative"
                 >
+                    <div className="absolute right-0 top-0 flex flex-col items-end gap-1">
+                        <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-200">
+                            <Lock className="h-3 w-3 mr-1" /> Secure Mode
+                        </Badge>
+                        {violations > 0 && (
+                            <span className="text-xs font-medium text-red-500">
+                                Strikes: {violations}/{MAX_VIOLATIONS}
+                            </span>
+                        )}
+                    </div>
+
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 text-sm font-medium mb-4">
                         <Target className="h-4 w-4" />
                         Step 2 of 3
@@ -261,7 +390,7 @@ export default function AssessmentPage() {
                         {career} Assessment
                     </h1>
                     <p className="text-muted-foreground">
-                        Answer all 20 questions to receive your personalized skill gap analysis
+                        Answer all {questions.length} questions to receive your personalized skill gap analysis
                     </p>
                 </motion.div>
 

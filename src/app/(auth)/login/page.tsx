@@ -61,26 +61,40 @@ export default function LoginPage() {
 
     const handleEmailAuth = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        if (!email || !password) {
+            toast.error("Please enter email and password");
+            return;
+        }
+
         setLoading(true);
 
         try {
             if (isRegister) {
                 // Register
-                const { error } = await supabase.auth.signUp({
+                const { data, error } = await supabase.auth.signUp({
                     email,
                     password,
                     options: {
                         data: {
                             full_name: fullName,
                         },
-                        emailRedirectTo: `${location.origin}/auth/callback`,
+                        emailRedirectTo: `${window.location.origin}/auth/callback`,
                     },
                 });
 
                 if (error) throw error;
                 
-                toast.success("Registration successful! You can now sign in.");
-                setIsRegister(false); // Switch to login view
+                // If Supabase auto-logs in (Confirm Email is OFF), redirect immediately
+                if (data.session) {
+                    toast.success("Account created successfully!");
+                    router.push("/dashboard");
+                    router.refresh();
+                } else {
+                    // If Confirm Email is ON, tell them to check email
+                    toast.success("Registration successful! Check your email to verify.");
+                    setIsRegister(false); // Switch to login view
+                }
             } else {
                 // Login
                 const { error } = await supabase.auth.signInWithPassword({
@@ -91,11 +105,12 @@ export default function LoginPage() {
                 if (error) throw error;
 
                 toast.success("Signed in successfully!");
-                router.push("/dashboard"); // Or wherever your post-login route is
+                router.push("/dashboard"); 
                 router.refresh();
             }
         } catch (error: any) {
-            toast.error(error.message || (isRegister ? "Failed to register" : "Failed to sign in"));
+            console.error("Authentication error:", error);
+            toast.error(error?.message || (isRegister ? "Failed to register" : "Failed to sign in"));
         } finally {
             setLoading(false);
         }

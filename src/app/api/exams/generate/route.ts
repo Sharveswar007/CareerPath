@@ -96,9 +96,8 @@ Return strict JSON structure:
 
         const allQuestions = [...mcqInserts, ...fibInserts, ...codingInserts];
 
-        const { error } = await supabase
-            .from("test_questions" as any)
-            .insert(allQuestions);
+        const sb = supabase as any;
+        const { error } = await sb.from("test_questions").insert(allQuestions);
 
         if (error) {
             console.error("DB Insert Error", error);

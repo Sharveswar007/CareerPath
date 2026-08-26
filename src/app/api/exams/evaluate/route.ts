@@ -19,11 +19,8 @@ export async function POST(request: NextRequest) {
         const supabase = await createClient();
 
         // 1. Fetch Session and Test Info
-        const { data: sessionData, error: sessionError } = await supabase
-            .from("test_sessions" as any)
-            .select("test_id, student_id, tests(generation_type)")
-            .eq("id", session_id)
-            .single();
+const sb = supabase as any;
+        const { data: sessionData, error: sessionError } = await sb.from("test_sessions").select("test_id, student_id, tests(generation_type)").eq("id", session_id).single();
 
         if (sessionError || !sessionData) {
             return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -32,13 +29,10 @@ export async function POST(request: NextRequest) {
         const { test_id, student_id } = sessionData;
 
         // 2. Fetch all submissions for this session
-        const { data: submissions, error: subError } = await supabase
-            .from("test_submissions" as any)
-            .select(`
+        const { data: submissions, error: subError } = await sb.from("test_submissions").select(`
                 id, score, is_correct, student_answer, code_submission, ai_evaluation,
                 test_questions ( type, content, test_cases )
-            `)
-            .eq("session_id", session_id);
+            `).eq("session_id", session_id);
 
         if (subError || !submissions) {
             return NextResponse.json({ error: "Failed to fetch submissions" }, { status: 500 });
@@ -97,9 +91,7 @@ Return strict JSON:
         const evaluation = JSON.parse(content);
 
         // 4. Save Results
-        const { error: resultError } = await supabase
-            .from("test_results" as any)
-            .upsert({
+        const { error: resultError } = await sb.from("test_results").upsert({
                 test_id,
                 student_id,
                 total_score: evaluation.total_score_out_of_100,
@@ -113,7 +105,7 @@ Return strict JSON:
         }
         
         // Update session status
-        await supabase.from("test_sessions" as any).update({ status: 'completed', completed_at: new Date().toISOString() }).eq("id", session_id);
+        await sb.from("test_sessions").update({ status: 'completed', completed_at: new Date().toISOString() }).eq("id", session_id);
 
         return NextResponse.json(evaluation);
 

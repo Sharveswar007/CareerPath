@@ -256,11 +256,11 @@ export default function TestSessionPage({ params }: { params: { code: string } }
                                         <button
                                             key={idx}
                                             onClick={() => handleAnswerChange(currentQuestion.id, option)}
-                                            className={\`w-full text-left px-6 py-4 rounded-xl border transition-all \${
+                                            className={`w-full text-left px-6 py-4 rounded-xl border transition-all ${
                                                 answers[currentQuestion.id] === option 
                                                 ? 'border-violet-500 bg-violet-500/10 shadow-[0_0_15px_rgba(139,92,246,0.1)]' 
                                                 : 'border-border hover:border-violet-500/50 hover:bg-accent/50'
-                                            }\`}
+                                            }`}
                                         >
                                             {option}
                                         </button>
@@ -320,10 +320,10 @@ export default function TestSessionPage({ params }: { params: { code: string } }
                                 </div>
                                 
                                 {/* Visible Test Results */}
-                                {answers[\`\${currentQuestion.id}_results\`] && (
+                                {answers[`${currentQuestion.id}_results`] && (
                                     <div className="mt-4 p-4 border rounded-xl bg-muted/50 space-y-3">
                                         <h3 className="font-semibold text-sm">Visible Test Results:</h3>
-                                        {answers[\`\${currentQuestion.id}_results\`].map((res: any, idx: number) => (
+                                        {answers[`${currentQuestion.id}_results`].map((res: any, idx: number) => (
                                             <div key={idx} className="flex flex-col gap-1 text-sm p-3 bg-background rounded-lg border">
                                                 <div className="flex items-center justify-between">
                                                     <span className="font-mono text-muted-foreground">Input: {res.input}</span>

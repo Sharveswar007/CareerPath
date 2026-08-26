@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
 
         // 1. Fetch Session and Test Info
         const { data: sessionData, error: sessionError } = await supabase
-            .from("test_sessions")
+            .from("test_sessions" as any)
             .select("test_id, student_id, tests(generation_type)")
             .eq("id", session_id)
             .single();
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
         // 2. Fetch all submissions for this session
         const { data: submissions, error: subError } = await supabase
-            .from("test_submissions")
+            .from("test_submissions" as any)
             .select(`
                 id, score, is_correct, student_answer, code_submission, ai_evaluation,
                 test_questions ( type, content, test_cases )
@@ -98,7 +98,7 @@ Return strict JSON:
 
         // 4. Save Results
         const { error: resultError } = await supabase
-            .from("test_results")
+            .from("test_results" as any)
             .upsert({
                 test_id,
                 student_id,
@@ -113,7 +113,7 @@ Return strict JSON:
         }
         
         // Update session status
-        await supabase.from("test_sessions").update({ status: 'completed', completed_at: new Date().toISOString() }).eq("id", session_id);
+        await supabase.from("test_sessions" as any).update({ status: 'completed', completed_at: new Date().toISOString() }).eq("id", session_id);
 
         return NextResponse.json(evaluation);
 

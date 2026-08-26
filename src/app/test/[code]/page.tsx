@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Users, Loader2 } from "lucide-react";
 
-export default function TestWaitingRoom({ params }: { params: { code: string } }) {
+export default function TestWaitingRoom() {
+    const params = useParams<{ code: string }>();
     const [studentCount, setStudentCount] = useState(1);
     const [testId, setTestId] = useState<string | null>(null);
     const router = useRouter();
-    const code = params.code.toUpperCase();
+    const code = params.code?.toUpperCase() || "";
 
     useEffect(() => {
         let subscription: any = null;

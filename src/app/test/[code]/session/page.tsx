@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useProctoring } from "@/hooks/useProctoring";
 import Editor from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,9 @@ import { toast } from "sonner";
 import { executeCode, normalizeLanguage } from "@/lib/execution";
 import { Loader2, Play, Send, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 
-export default function TestSessionPage({ params }: { params: { code: string } }) {
-    const code = params.code.toUpperCase();
+export default function TestSessionPage() {
+    const params = useParams<{ code: string }>();
+    const code = params.code?.toUpperCase() || "";
     const router = useRouter();
     const [testData, setTestData] = useState<any>(null);
     const [questions, setQuestions] = useState<any[]>([]);
@@ -20,14 +21,11 @@ export default function TestSessionPage({ params }: { params: { code: string } }
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
 
-    const { startProctoring, stopProctoring, isRecording, stream } = useProctoring("test_session");
-    const videoRef = useRef<HTMLVideoElement>(null);
-
-    useEffect(() => {
-        if (stream && videoRef.current) {
-            videoRef.current.srcObject = stream;
+    const { isFullscreen, requestFullscreen, exitFullscreen } = useProctoring({
+        onViolation: (count, reason) => {
+            toast.error(`Proctoring Alert: ${reason}`);
         }
-    }, [stream]);
+    });
 
     useEffect(() => {
         let mounted = true;
@@ -227,17 +225,12 @@ export default function TestSessionPage({ params }: { params: { code: string } }
                         disabled={isSubmitting}
                     >
                         {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
-                        Submit Exam
+                        Submit Test
                     </Button>
                 </div>
             </header>
 
             <main className="flex-1 overflow-hidden flex relative">
-                {/* Proctoring Video Feed */}
-                <div className="absolute bottom-4 left-4 w-48 h-36 bg-black rounded-lg overflow-hidden border-2 border-border shadow-xl z-50">
-                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
-                </div>
-
                 <div className="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto w-full">
                     <Card className="p-8 border-border/40 bg-background/50 backdrop-blur-xl">
                         

@@ -81,14 +81,14 @@ export default function TestSessionPage() {
             }
 
             // Start proctoring
-            startProctoring();
+            requestFullscreen();
         };
 
         loadTest();
 
         return () => {
             mounted = false;
-            stopProctoring();
+            exitFullscreen();
         };
     }, [code, router]);
 
@@ -139,7 +139,7 @@ export default function TestSessionPage() {
         if (!confirm("Are you sure you want to submit your exam? You cannot undo this.")) return;
         
         setIsSubmitting(true);
-        stopProctoring();
+        exitFullscreen();
 
         try {
             const { createClient } = await import("@/lib/supabase/client");
@@ -169,7 +169,7 @@ export default function TestSessionPage() {
                 };
             });
 
-            await supabase.from("test_submissions").insert(submissions);
+            await supabase.from("test_submissions" as any).insert(submissions);
 
             // Trigger Evaluation
             const res = await fetch('/api/exams/evaluate', {
@@ -187,7 +187,7 @@ export default function TestSessionPage() {
             console.error("Submission Error", error);
             toast.error("Failed to submit exam. Please try again.");
             setIsSubmitting(false);
-            startProctoring(); // Restart if failed
+            requestFullscreen(); // Restart if failed
         }
     };
 
@@ -212,7 +212,7 @@ export default function TestSessionPage() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    {isRecording && (
+                    {isFullscreen && (
                         <div className="flex items-center gap-2 text-red-500 bg-red-500/10 px-3 py-1 rounded-full text-sm">
                             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                             Proctoring Active

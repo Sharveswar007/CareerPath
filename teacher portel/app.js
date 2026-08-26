@@ -1,7 +1,7 @@
 // Teacher Portal - Main Application
 // Professional Student Management System
 
-// SUPABASE_CONFIG is loaded from config.js (global variable)
+import { SUPABASE_CONFIG } from './config.js';
 
 // Initialize Supabase Client
 const { createClient } = supabase;
@@ -137,7 +137,58 @@ function setupEventListeners() {
         modalOverlay.addEventListener('click', closeModal);
     }
 
-    // Tab switching
+    // Main Tab switching
+    document.querySelectorAll('.main-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const viewId = btn.dataset.view;
+            
+            document.querySelectorAll('.main-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            document.querySelectorAll('.main-view-section').forEach(v => v.classList.add('hidden'));
+            document.getElementById(viewId)?.classList.remove('hidden');
+
+            if (viewId === 'tests-view') {
+                fetchTests();
+            }
+        });
+    });
+
+    // Create Test Modal setup
+    const createTestBtn = document.getElementById('create-test-btn');
+    const createTestModal = document.getElementById('create-test-modal');
+    if (createTestBtn && createTestModal) {
+        createTestBtn.addEventListener('click', () => {
+            createTestModal.classList.add('active');
+        });
+    }
+
+    const submitCreateTest = document.getElementById('submit-create-test');
+    if (submitCreateTest) {
+        submitCreateTest.addEventListener('click', handleCreateTest);
+    }
+
+    // Modal closing logic
+    document.querySelectorAll('.close-modal').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.target.closest('.modal').classList.remove('active');
+        });
+    });
+
+    // Test Type selection
+    document.querySelectorAll('input[name="test-type"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            if (e.target.value === 'ai') {
+                document.getElementById('ai-test-settings').classList.remove('hidden');
+                document.getElementById('custom-test-settings').classList.add('hidden');
+            } else {
+                document.getElementById('ai-test-settings').classList.add('hidden');
+                document.getElementById('custom-test-settings').classList.remove('hidden');
+            }
+        });
+    });
+
+    // Tab switching (for student detail modal)
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const tabId = btn.dataset.tab;
@@ -195,9 +246,16 @@ async function handleSignup() {
     const fullName = document.getElementById('signup-name').value;
     const email = document.getElementById('signup-email').value;
     const password = document.getElementById('signup-password').value;
+    const code = document.getElementById('signup-code').value;
 
-    if (!email || !password) {
-        alert('Please fill in all fields');
+    if (!email || !password || !code) {
+        alert('Please fill in all fields including the Teacher Access Code');
+        return;
+    }
+    
+    // In a real application, this secret should be validated on the backend!
+    if (code !== 'TEACHER2026') {
+        alert('Invalid Teacher Access Code');
         return;
     }
 
@@ -207,7 +265,8 @@ async function handleSignup() {
             password,
             options: {
                 data: {
-                    full_name: fullName
+                    full_name: fullName,
+                    role: 'teacher'
                 }
             }
         });
@@ -246,6 +305,19 @@ async function handleLogout() {
 // ============================================
 
 async function loadDashboard() {
+    // Check if the user is a teacher
+    const { data: profile, error } = await supabaseClient
+        .from('profiles')
+        .select('role')
+        .eq('id', currentTeacher.id)
+        .single();
+        
+    if (error || profile?.role !== 'teacher') {
+        alert('Access Denied. You must be a registered teacher to access this portal.');
+        await handleLogout();
+        return;
+    }
+
     showView('dashboard');
 
     // Update teacher info
@@ -338,6 +410,12 @@ async function fetchStudentData() {
             .select('user_id, id')
             .in('user_id', studentIds);
 
+        // Fetch proctoring violations (malpractices)
+        const { data: violations } = await supabaseClient
+            .from('proctoring_violations')
+            .select('user_id, violation_reason, assessment_type, created_at')
+            .in('user_id', studentIds);
+
         // Combine all data
         allStudents = profiles.map(profile => {
             const assessment = assessments?.find(a => a.user_id === profile.id);
@@ -346,6 +424,7 @@ async function fetchStudentData() {
             const resumeCount = resumes?.filter(r => r.user_id === profile.id).length || 0;
             const chatCount = chats?.filter(c => c.user_id === profile.id).length || 0;
             const latestResume = resumes?.filter(r => r.user_id === profile.id)[0];
+            const studentViolations = violations?.filter(v => v.user_id === profile.id) || [];
 
             return {
                 ...profile,
@@ -361,7 +440,8 @@ async function fetchStudentData() {
                 challenges_solved: challengeCount,
                 resumes_analyzed: resumeCount,
                 chat_sessions: chatCount,
-                latest_ats_score: latestResume?.ats_score || null
+                latest_ats_score: latestResume?.ats_score || null,
+                malpractices: studentViolations
             };
         });
 
@@ -589,6 +669,42 @@ async function showStudentDetail(studentId) {
     document.getElementById('modal-resumes').textContent = student.resumes_analyzed || 0;
     document.getElementById('modal-chats').textContent = student.chat_sessions || 0;
 
+    // Malpractices / Violations
+    const malpracticesTimeline = document.getElementById('malpractices-timeline');
+    if (malpracticesTimeline) {
+        if (student.malpractices && student.malpractices.length > 0) {
+            malpracticesTimeline.innerHTML = student.malpractices.map((v, index) => {
+                const dateObj = new Date(v.created_at);
+                const dateStr = dateObj.toLocaleDateString();
+                const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                let badgeHtml = '';
+                if (v.assessment_type) {
+                    badgeHtml = `<span class="timeline-badge" style="background: #ef4444; color: white; margin-left: 10px;">${v.assessment_type}</span>`;
+                }
+
+                return `
+                    <div class="timeline-item" style="animation-delay: ${index * 0.1}s; margin-bottom: 1rem;">
+                        <div class="timeline-card" style="border-left: 4px solid #ef4444; padding: 12px; background: rgba(239, 68, 68, 0.05); border-radius: 6px;">
+                            <div class="timeline-header" style="margin-bottom: 4px;">
+                                <strong style="color: #ef4444; font-size: 14px;">Violation Detected</strong>
+                                ${badgeHtml}
+                                <span class="timeline-date" style="font-size: 12px; color: var(--gray-400);">${dateStr} at ${timeStr}</span>
+                            </div>
+                            <div style="font-size: 14px; color: var(--gray-300);">${v.violation_reason}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            malpracticesTimeline.innerHTML = `
+                <div class="timeline-empty">
+                    <p class="text-sm text-gray-500" style="color: #10b981;">No malpractices recorded.</p>
+                </div>
+            `;
+        }
+    }
+
     // Tab: Progress - Fetch Assessment History
     await loadAssessmentHistory(student.id);
 
@@ -746,6 +862,227 @@ function handleSearch(event) {
     }
 
     renderStudentTable();
+}
+
+// ============================================
+// TEST MANAGEMENT
+// ============================================
+
+async function fetchTests() {
+    try {
+        const { data: tests, error } = await supabaseClient
+            .from('tests')
+            .select('*')
+            .eq('teacher_id', currentTeacher.id)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        const grid = document.getElementById('tests-grid');
+        
+        if (!tests || tests.length === 0) {
+            grid.innerHTML = '<p class="text-gray-400">No tests created yet.</p>';
+            return;
+        }
+
+        grid.innerHTML = tests.map(test => `
+            <div class="test-card glass-card p-6 rounded-xl border border-border/50">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-lg font-bold">${test.title}</h3>
+                    <span class="badge ${test.status === 'created' ? 'bg-violet-500/20 text-violet-400' : test.status === 'started' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}">${test.status.toUpperCase()}</span>
+                </div>
+                <div class="text-sm text-gray-400 mb-6 space-y-2">
+                    <p><i data-lucide="key" class="w-4 h-4 inline mr-2"></i> Code: <strong class="text-white tracking-widest font-mono">${test.code}</strong></p>
+                    <p><i data-lucide="calendar" class="w-4 h-4 inline mr-2"></i> Created: ${new Date(test.created_at).toLocaleDateString()}</p>
+                </div>
+                <button class="btn btn-primary w-full" onclick="openLiveTestDashboard('${test.id}', '${test.code}', '${test.status}')">
+                    Manage Session
+                </button>
+            </div>
+        `).join('');
+
+        lucide.createIcons();
+
+    } catch (error) {
+        console.error("Fetch tests error:", error);
+        showToast("Failed to fetch tests", "error");
+    }
+}
+
+async function handleCreateTest() {
+    const isAi = document.querySelector('input[name="test-type"]:checked').value === 'ai';
+    const btn = document.getElementById('submit-create-test');
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin mr-2"></i> Creating...';
+    lucide.createIcons();
+
+    try {
+        // Generate random 6 letter code
+        const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+        
+        let title = "Custom Exam";
+        if (isAi) {
+            const focus = document.getElementById('test-focus-area').value || "General Programming";
+            const diff = document.getElementById('test-difficulty').value;
+            title = `AI Exam: ${focus} (${diff})`;
+        }
+
+        // Insert into DB
+        const { data: testData, error: insertError } = await supabaseClient
+            .from('tests')
+            .insert({
+                teacher_id: currentTeacher.id,
+                title,
+                code,
+                status: 'created',
+                generation_type: isAi ? 'ai' : 'custom'
+            })
+            .select()
+            .single();
+
+        if (insertError) throw insertError;
+
+        if (isAi) {
+            // Call Next.js API to generate questions
+            const focus = document.getElementById('test-focus-area').value;
+            const diff = document.getElementById('test-difficulty').value;
+
+            // In a real deployed app, you'd use the full domain
+            const apiUrl = window.location.origin.includes('5500') || window.location.origin.includes('index.html') 
+                ? 'http://localhost:3000/api/exams/generate' 
+                : '/api/exams/generate';
+
+            try {
+                const res = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        test_id: testData.id,
+                        focus_area: focus,
+                        difficulty: diff
+                    })
+                });
+                
+                if (!res.ok) throw new Error("AI Generation failed");
+            } catch (err) {
+                console.error("AI API Error (Is Next.js server running?):", err);
+                showToast("Failed to generate questions. Ensure Next.js server is running.", "error");
+            }
+        }
+
+        showToast("Test created successfully!", "success");
+        document.getElementById('create-test-modal').classList.remove('active');
+        fetchTests();
+
+    } catch (error) {
+        console.error("Create test error:", error);
+        showToast("Failed to create test", "error");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Generate Test';
+    }
+}
+
+let activeLiveSessionSubscription = null;
+
+window.openLiveTestDashboard = async function(testId, code, status) {
+    const modal = document.getElementById('live-test-modal');
+    document.getElementById('live-test-code').textContent = `Join Code: ${code}`;
+    modal.classList.add('active');
+    
+    const startBtn = document.getElementById('start-exam-btn');
+    
+    if (status === 'created') {
+        startBtn.style.display = 'block';
+        startBtn.textContent = 'Start Exam';
+        startBtn.onclick = () => startTest(testId);
+    } else if (status === 'started') {
+        startBtn.style.display = 'block';
+        startBtn.textContent = 'End Exam';
+        startBtn.onclick = () => endTest(testId);
+    } else {
+        startBtn.style.display = 'none';
+    }
+
+    await loadLiveStudents(testId);
+
+    // Subscribe to realtime updates for test_sessions and test_results
+    if (activeLiveSessionSubscription) {
+        supabaseClient.removeChannel(activeLiveSessionSubscription);
+    }
+
+    activeLiveSessionSubscription = supabaseClient
+        .channel(`live-session-${testId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'test_sessions', filter: `test_id=eq.${testId}` }, () => loadLiveStudents(testId))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'test_results', filter: `test_id=eq.${testId}` }, () => loadLiveStudents(testId))
+        .subscribe();
+};
+
+async function loadLiveStudents(testId) {
+    try {
+        // Fetch sessions
+        const { data: sessions, error: sessionsError } = await supabaseClient
+            .from('test_sessions')
+            .select('id, student_id, status, profiles(full_name, email)')
+            .eq('test_id', testId);
+
+        // Fetch results
+        const { data: results } = await supabaseClient
+            .from('test_results')
+            .select('student_id, total_score, coding_category')
+            .eq('test_id', testId);
+
+        const tbody = document.getElementById('live-students-tbody');
+        const countEl = document.getElementById('live-students-count');
+
+        if (sessionsError) throw sessionsError;
+
+        countEl.textContent = `${sessions.length} student(s) joined`;
+
+        if (sessions.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-gray-400">Waiting for students...</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = sessions.map(session => {
+            const result = results?.find(r => r.student_id === session.student_id);
+            return `
+                <tr>
+                    <td>
+                        <div class="font-medium">${session.profiles?.full_name || 'Unknown'}</div>
+                        <div class="text-sm text-gray-400">${session.profiles?.email}</div>
+                    </td>
+                    <td>
+                        <span class="badge ${session.status === 'joined' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}">${session.status.toUpperCase()}</span>
+                    </td>
+                    <td>${result ? `${result.total_score}/100` : '-'}</td>
+                    <td>${result ? `<span class="badge bg-violet-500/20 text-violet-400">${result.coding_category}</span>` : '-'}</td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (error) {
+        console.error("Load live students error:", error);
+    }
+}
+
+async function startTest(testId) {
+    const { error } = await supabaseClient.from('tests').update({ status: 'started' }).eq('id', testId);
+    if (!error) {
+        showToast("Exam started! Students can now see the questions.", "success");
+        fetchTests();
+        document.getElementById('start-exam-btn').textContent = 'End Exam';
+        document.getElementById('start-exam-btn').onclick = () => endTest(testId);
+    }
+}
+
+async function endTest(testId) {
+    const { error } = await supabaseClient.from('tests').update({ status: 'completed' }).eq('id', testId);
+    if (!error) {
+        showToast("Exam ended.", "success");
+        fetchTests();
+        document.getElementById('start-exam-btn').style.display = 'none';
+    }
 }
 
 // ============================================

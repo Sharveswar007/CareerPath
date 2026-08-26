@@ -22,6 +22,7 @@ import {
     User,
     Target,
     Rocket,
+    FileQuestion,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ const navItems = [
     { href: "/", label: "Home", icon: Home },
     { href: "/profile", label: "Profile", icon: User },
     { href: "/skills", label: "Skills Analysis", icon: Target },
+    { href: "/test", label: "Test", icon: FileQuestion },
     { href: "/trends", label: "Career Trends", icon: TrendingUp },
     { href: "/challenges", label: "Challenges", icon: Code2 },
     { href: "/resume", label: "Resume", icon: FileText },

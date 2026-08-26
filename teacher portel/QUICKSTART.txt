@@ -1,0 +1,124 @@
+┌─────────────────────────────────────────────────┐
+│  TEACHER PORTAL - QUICK START GUIDE            │
+│  Professional Student Management System         │
+└─────────────────────────────────────────────────┘
+
+📋 STEP 1: Configure Supabase
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Open this file:
+   📂 CareerPath/.env.local
+
+2. Copy these two values:
+   NEXT_PUBLIC_SUPABASE_URL=https://....supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbG....
+
+3. Paste into this file:
+   📂 teacher portel/config.js
+
+   Replace:
+   url: 'https://your-project.supabase.co'
+   anonKey: 'your-anon-key'
+
+   With your actual values
+
+
+📋 STEP 2: Add Test Student
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️  IMPORTANT: Teacher Portal shows students where
+    faculty_advisor_email = teacher's Google email
+
+1. Open Student Portal in browser
+2. Login with a student account
+3. Go to Profile → Click "Edit"
+4. Find "Faculty Advisor Email" field
+5. Enter YOUR Google email (the one you'll use for Teacher Portal)
+6. Click "Save Changes"
+
+✅ Now that student is linked to you!
+
+
+📋 STEP 3: Run Teacher Portal
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RECOMMENDED METHOD:
+
+1. Install VS Code extension: "Live Server"
+2. Open teacher portel/index.html
+3. Right-click → "Open with Live Server"
+4. Browser opens at:
+   http://127.0.0.1:5500/teacher%20portel/index.html
+
+ALTERNATIVE:
+- Just double-click index.html
+- (May have CORS issues)
+
+
+📋 STEP 4: Login & Verify
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Click "Continue with Google"
+2. Sign in with your Google account
+   (The SAME email you entered in Step 2)
+3. You should see:
+   ✓ Dashboard loads
+   ✓ Stats show correct numbers
+   ✓ Student table shows your test student
+4. Click student row to view full details
+5. Click "Export to Excel" to download data
+
+
+🔍 TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+❌ "No Students Found"
+   → Check if student has faculty_advisor_email set
+   → Verify it matches your Google login email
+   → Check browser console for errors
+
+❌ "Login Failed"
+   → Verify Supabase credentials in config.js
+   → Check Google OAuth is enabled in Supabase
+   → Try clearing browser cache
+
+❌ "Export Not Working"
+   → Check if SheetJS loaded (see browser console)
+   → Verify you have students to export
+   → Allow downloads in browser
+
+
+📚 FEATURES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Real-time student data from Supabase
+✅ Professional black & white UI
+✅ Searchable student table
+✅ Detailed student profiles
+✅ Excel export (.xlsx)
+✅ Dark mode support
+✅ Responsive design
+✅ Auto-updates when data changes
+
+
+📞 NEED HELP?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Check these files:
+- README.md (detailed setup guide)
+- walkthrough.md (complete documentation)
+- Browser console (F12, check for errors)
+
+
+🎉 READY TO GO!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Your Teacher Portal is production-ready!
+
+All files are in: teacher portel/
+- index.html
+- styles.css
+- app.js
+- config.js
+- README.md
+- QUICKSTART.txt (this file)

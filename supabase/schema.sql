@@ -15,6 +15,7 @@ create table public.profiles (
   onboarding_complete boolean default false,
   updated_at timestamp with time zone,
   -- New profile fields
+  role text default 'student',
   college text,
   personal_email text,
   date_of_birth date,
@@ -49,8 +50,8 @@ create policy "Users can update own profile."
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, email, full_name, avatar_url)
-  values (new.id, new.email, new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url');
+  insert into public.profiles (id, email, full_name, avatar_url, role)
+  values (new.id, new.email, new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url', coalesce(new.raw_user_meta_data->>'role', 'student'));
   return new;
 end;
 $$ language plpgsql security definer;
@@ -284,3 +285,145 @@ create policy "Users can view their own violations"
 create policy "Users can insert their own violations"
   on public.proctoring_violations for insert
   with check ( auth.uid() = user_id );
+
+-- =====================================================
+-- Tests Table
+-- =====================================================
+create table public.tests (
+  id uuid default gen_random_uuid() primary key,
+  creator_id uuid references auth.users(id) not null,
+  code text not null unique,
+  status text not null default 'created' check (status in ('created', 'started', 'completed')),
+  generation_type text not null check (generation_type in ('custom', 'ai_generated')),
+  configuration jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.tests enable row level security;
+
+create policy "Anyone can view tests"
+  on public.tests for select
+  using ( true );
+
+create policy "Teachers can insert tests"
+  on public.tests for insert
+  with check ( exists (select 1 from public.profiles where id = auth.uid() and role = 'teacher') );
+
+create policy "Teachers can update their own tests"
+  on public.tests for update
+  using ( creator_id = auth.uid() );
+
+-- =====================================================
+-- Test Questions Table
+-- =====================================================
+create table public.test_questions (
+  id uuid default gen_random_uuid() primary key,
+  test_id uuid references public.tests(id) on delete cascade not null,
+  type text not null check (type in ('mcq', 'fill_in_blank', 'coding')),
+  content jsonb not null,
+  answer jsonb,
+  test_cases jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.test_questions enable row level security;
+
+create policy "Anyone can view test questions"
+  on public.test_questions for select
+  using ( true );
+
+create policy "Teachers can insert test questions"
+  on public.test_questions for insert
+  with check ( exists (select 1 from public.profiles where id = auth.uid() and role = 'teacher') );
+
+-- =====================================================
+-- Test Sessions Table
+-- =====================================================
+create table public.test_sessions (
+  id uuid default gen_random_uuid() primary key,
+  test_id uuid references public.tests(id) on delete cascade not null,
+  student_id uuid references auth.users(id) not null,
+  status text not null default 'joined' check (status in ('joined', 'in_progress', 'completed')),
+  joined_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  completed_at timestamp with time zone,
+  unique(test_id, student_id)
+);
+
+alter table public.test_sessions enable row level security;
+
+create policy "Users can view their own sessions or teachers can view all"
+  on public.test_sessions for select
+  using ( auth.uid() = student_id OR exists (select 1 from public.tests where creator_id = auth.uid() and id = test_id) );
+
+create policy "Students can insert their own sessions"
+  on public.test_sessions for insert
+  with check ( auth.uid() = student_id );
+
+create policy "Students can update their own sessions"
+  on public.test_sessions for update
+  using ( auth.uid() = student_id );
+
+-- =====================================================
+-- Test Submissions Table
+-- =====================================================
+create table public.test_submissions (
+  id uuid default gen_random_uuid() primary key,
+  session_id uuid references public.test_sessions(id) on delete cascade not null,
+  question_id uuid references public.test_questions(id) on delete cascade not null,
+  student_answer jsonb,
+  code_submission text,
+  is_correct boolean,
+  score integer,
+  ai_evaluation jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(session_id, question_id)
+);
+
+alter table public.test_submissions enable row level security;
+
+create policy "Students can view their own submissions or teachers can view all"
+  on public.test_submissions for select
+  using ( 
+    exists (select 1 from public.test_sessions where id = session_id and student_id = auth.uid()) OR 
+    exists (select 1 from public.test_sessions s join public.tests t on s.test_id = t.id where s.id = session_id and t.creator_id = auth.uid()) 
+  );
+
+create policy "Students can insert their own submissions"
+  on public.test_submissions for insert
+  with check ( exists (select 1 from public.test_sessions where id = session_id and student_id = auth.uid()) );
+
+create policy "Students can update their own submissions"
+  on public.test_submissions for update
+  using ( exists (select 1 from public.test_sessions where id = session_id and student_id = auth.uid()) );
+
+-- =====================================================
+-- Test Results Table
+-- =====================================================
+create table public.test_results (
+  id uuid default gen_random_uuid() primary key,
+  test_id uuid references public.tests(id) on delete cascade not null,
+  student_id uuid references auth.users(id) not null,
+  total_score integer,
+  coding_category text check (coding_category in ('no_code', 'low_code', 'high_code')),
+  detailed_report jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(test_id, student_id)
+);
+
+alter table public.test_results enable row level security;
+
+create policy "Users can view their own results or teachers can view all"
+  on public.test_results for select
+  using ( auth.uid() = student_id OR exists (select 1 from public.tests where creator_id = auth.uid() and id = test_id) );
+
+create policy "Teachers can insert results"
+  on public.test_results for insert
+  with check ( exists (select 1 from public.tests where creator_id = auth.uid() and id = test_id) );
+
+create policy "Students can insert their own results via api"
+  on public.test_results for insert
+  with check ( auth.uid() = student_id );
+
+create policy "Students can update their own results"
+  on public.test_results for update
+  using ( auth.uid() = student_id );

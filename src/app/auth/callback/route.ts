@@ -12,6 +12,16 @@ export async function GET(request: NextRequest) {
         const { error, data } = await supabase.auth.exchangeCodeForSession(code);
 
         if (!error && data.user) {
+            const requestedRole = searchParams.get("role");
+
+            if (requestedRole === "teacher") {
+                // Elevate them to teacher in database
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                await (supabase as any).from("profiles").update({ role: "teacher" }).eq("id", data.user.id);
+                // Also update user metadata
+                await supabase.auth.updateUser({ data: { role: "teacher" } });
+            }
+
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const { data: profile } = await (supabase as any)
                 .from("profiles")

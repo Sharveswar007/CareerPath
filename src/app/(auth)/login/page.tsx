@@ -49,10 +49,18 @@ export default function LoginPage() {
     const handleGoogleLogin = async () => {
         setLoading(true);
         try {
+            if (isRegister && role === "teacher") {
+                if (accessCode !== "TEACHER2026") {
+                    toast.error("Invalid Teacher Access Code");
+                    setLoading(false);
+                    return;
+                }
+            }
+
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: "google",
                 options: {
-                    redirectTo: `${window.location.origin}/auth/callback`,
+                    redirectTo: `${window.location.origin}/auth/callback?role=${isRegister ? role : ''}`,
                 },
             });
             if (error) throw error;

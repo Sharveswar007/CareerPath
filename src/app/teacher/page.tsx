@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Users, FileQuestion, Plus, Loader2, Play, User, Key, Calendar, Download, Target, Trophy, Mail, Phone, BookOpen, Trash2, CheckCircle2, XCircle, ChevronRight, Eye } from "lucide-react";
+import { Users, FileQuestion, Plus, Loader2, Play, User, Key, Calendar, Download, Target, Trophy, Mail, Phone, BookOpen, Trash2, CheckCircle2, XCircle, ChevronRight, Eye, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TestBuilder, CustomQuestion } from "@/components/teacher/TestBuilder";
@@ -669,14 +669,16 @@ export default function TeacherDashboard() {
                                                     <tr key={session.id} className="bg-card/50">
                                                         <td className="px-4 py-3 font-medium">{session.profiles?.full_name || 'Unknown Student'}</td>
                                                         <td className="px-4 py-3 text-right flex items-center justify-end gap-2">
-                                                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                                            <span className={`text-xs px-2 py-1 rounded-full font-medium flex items-center gap-1 ${
                                                                 session.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' :
+                                                                session.status === 'terminated' ? 'bg-red-500/20 text-red-500 font-bold border border-red-500/30' :
                                                                 session.status === 'in_progress' ? 'bg-violet-500/10 text-violet-500' :
                                                                 'bg-gray-500/10 text-gray-500'
                                                             }`}>
+                                                                {session.status === 'terminated' && <ShieldAlert className="w-3 h-3" />}
                                                                 {session.status.toUpperCase()}
                                                             </span>
-                                                            {session.status === 'completed' && (
+                                                            {(session.status === 'completed' || session.status === 'terminated') && (
                                                                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setSelectedSession(session)}>
                                                                     <Eye className="w-4 h-4 text-violet-500" />
                                                                 </Button>

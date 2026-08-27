@@ -90,6 +90,8 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
             
             if (!isCurrentlyFullscreen && isFullscreenRef.current) {
                 triggerViolation("Exited full screen");
+                // Attempt to auto-resume full screen immediately
+                startProctoring().catch(() => {});
             }
             setIsFullscreen(isCurrentlyFullscreen);
             isFullscreenRef.current = isCurrentlyFullscreen;
@@ -98,6 +100,9 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
         const handleVisibilityChange = () => {
             if (document.visibilityState === "hidden" && enabledRef.current) {
                 triggerViolation("Switched tabs or minimized browser");
+            } else if (document.visibilityState === "visible" && enabledRef.current && !document.fullscreenElement) {
+                // Attempt to push back into full screen when they return
+                startProctoring().catch(() => {});
             }
         };
 

@@ -24,11 +24,70 @@ export default function TestSessionPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [hasStarted, setHasStarted] = useState(false);
+    const [isKicked, setIsKicked] = useState(false);
+    const [showProctorWarning, setShowProctorWarning] = useState(false);
+    const [warningReason, setWarningReason] = useState("");
+    const MAX_VIOLATIONS = 3;
 
-    const { isFullscreen, startProctoring, exitFullscreen } = useProctoring({
-        onViolation: (count, reason) => {
-            toast.error(`Proctoring Alert: ${reason}`);
+    const handleViolation = async (violationCount: number, reason: string) => {
+        if (isKicked) return;
+
+        if (violationCount >= MAX_VIOLATIONS) {
+            setIsKicked(true);
+            toast.error(`Exam Terminated: You have exceeded the maximum allowed violations (${MAX_VIOLATIONS}).`, {
+                duration: 5000,
+            });
+
+            // Set session status to terminated
+            if (sessionId) {
+                try {
+                    const { createClient } = await import("@/lib/supabase/client");
+                    const supabase = createClient();
+                    await supabase.from("test_sessions").update({ status: 'terminated' }).eq('id', sessionId);
+                    
+                    // Log final violation
+                    await supabase.from("proctoring_violations").insert({
+                        user_id: (await supabase.auth.getUser()).data.user?.id,
+                        assessment_type: "live_exam",
+                        violation_reason: `Terminated after ${MAX_VIOLATIONS} strikes (Final: ${reason})`,
+                    });
+                } catch (e) {
+                    console.error("Failed to terminate session", e);
+                }
+            }
+
+            // Kick them to home screen after 3 seconds
+            setTimeout(() => {
+                router.push("/");
+            }, 3000);
+            return;
         }
+
+        // Show warning overlay
+        setWarningReason(reason);
+        setShowProctorWarning(true);
+        toast.error(`Strike ${violationCount}/${MAX_VIOLATIONS}: ${reason}`, {
+            duration: 5000,
+        });
+        
+        // Log individual strike
+        try {
+            const { createClient } = await import("@/lib/supabase/client");
+            const supabase = createClient();
+            await supabase.from("proctoring_violations").insert({
+                user_id: (await supabase.auth.getUser()).data.user?.id,
+                assessment_type: "live_exam",
+                violation_reason: `Strike ${violationCount}: ${reason}`,
+            });
+        } catch (e) {
+            console.error("Failed to log strike", e);
+        }
+    };
+
+    const { isFullscreen, startProctoring, exitFullscreen, violations } = useProctoring({
+        onViolation: handleViolation,
+        maxViolations: MAX_VIOLATIONS,
+        enabled: hasStarted && !isKicked
     });
 
     useEffect(() => {
@@ -248,6 +307,48 @@ export default function TestSessionPage() {
                     <Button onClick={handleStartExam} size="lg" className="w-full">
                         Grant Permissions & Start
                     </Button>
+                </Card>
+            </div>
+        );
+    }
+
+    if (showProctorWarning) {
+        return (
+            <div className="flex flex-col h-screen bg-background items-center justify-center p-6 z-[9999] fixed inset-0">
+                <Card className="max-w-md w-full p-8 flex flex-col items-center text-center space-y-6 border-red-500/50 shadow-2xl shadow-red-500/20 bg-card">
+                    <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center text-red-500">
+                        <AlertTriangle className="w-8 h-8 animate-pulse" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-bold text-red-500">Proctoring Warning</h2>
+                        <p className="text-muted-foreground mt-2">
+                            You have triggered a proctoring violation.
+                        </p>
+                    </div>
+                    <div className="bg-muted p-4 rounded-xl text-sm font-medium border border-border w-full">
+                        Reason: <span className="text-foreground font-bold">{warningReason}</span>
+                    </div>
+                    <div className="flex items-center gap-2 font-bold text-lg">
+                        <span>Strikes:</span>
+                        <span className="text-red-500">{violations}</span>
+                        <span className="text-muted-foreground">/ {MAX_VIOLATIONS}</span>
+                    </div>
+                    {violations >= MAX_VIOLATIONS ? (
+                        <div className="text-red-500 font-bold bg-red-500/10 p-3 rounded-lg w-full">
+                            Exam Terminated. Redirecting...
+                        </div>
+                    ) : (
+                        <Button 
+                            size="lg"
+                            className="w-full bg-red-500 hover:bg-red-600 text-white"
+                            onClick={() => {
+                                setShowProctorWarning(false);
+                                if (!isFullscreen) startProctoring();
+                            }}
+                        >
+                            Acknowledge & Resume Exam
+                        </Button>
+                    )}
                 </Card>
             </div>
         );

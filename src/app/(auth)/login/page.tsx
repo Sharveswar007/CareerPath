@@ -40,6 +40,9 @@ export default function LoginPage() {
     const [password, setPassword] = useState("");
     const [fullName, setFullName] = useState("");
 
+    const [role, setRole] = useState<"student" | "teacher">("student");
+    const [accessCode, setAccessCode] = useState("");
+
     const router = useRouter();
     const supabase = createClient();
 
@@ -71,6 +74,12 @@ export default function LoginPage() {
 
         try {
             if (isRegister) {
+                if (role === "teacher" && accessCode !== "TEACHER2026") {
+                    toast.error("Invalid Teacher Access Code");
+                    setLoading(false);
+                    return;
+                }
+
                 // Register
                 const { data, error } = await supabase.auth.signUp({
                     email,
@@ -78,6 +87,7 @@ export default function LoginPage() {
                     options: {
                         data: {
                             full_name: fullName,
+                            role: role,
                         },
                         emailRedirectTo: `${window.location.origin}/auth/callback`,
                     },
@@ -88,7 +98,11 @@ export default function LoginPage() {
                 // If Supabase auto-logs in (Confirm Email is OFF), redirect immediately
                 if (data.session) {
                     toast.success("Account created successfully!");
-                    router.push("/dashboard");
+                    if (role === "teacher") {
+                        router.push("/teacher/dashboard");
+                    } else {
+                        router.push("/dashboard");
+                    }
                     router.refresh();
                 } else {
                     // If Confirm Email is ON, tell them to check email
@@ -97,7 +111,7 @@ export default function LoginPage() {
                 }
             } else {
                 // Login
-                const { error } = await supabase.auth.signInWithPassword({
+                const { data, error } = await supabase.auth.signInWithPassword({
                     email,
                     password,
                 });
@@ -105,7 +119,12 @@ export default function LoginPage() {
                 if (error) throw error;
 
                 toast.success("Signed in successfully!");
-                router.push("/dashboard"); 
+                const userRole = data.user?.user_metadata?.role || "student";
+                if (userRole === "teacher") {
+                    router.push("/teacher/dashboard");
+                } else {
+                    router.push("/dashboard"); 
+                }
                 router.refresh();
             }
         } catch (error: any) {
@@ -143,6 +162,21 @@ export default function LoginPage() {
                         </p>
                     </div>
 
+                    <div className="flex bg-muted p-1 rounded-lg mb-6">
+                        <button
+                            onClick={() => setRole("student")}
+                            className={`flex-1 text-sm font-medium py-2 rounded-md transition-colors ${role === "student" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                        >
+                            Student
+                        </button>
+                        <button
+                            onClick={() => setRole("teacher")}
+                            className={`flex-1 text-sm font-medium py-2 rounded-md transition-colors ${role === "teacher" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                        >
+                            Teacher
+                        </button>
+                    </div>
+
                     <form onSubmit={handleEmailAuth} className="space-y-4 mb-6">
                         <AnimatePresence mode="wait">
                             {isRegister && (
@@ -151,16 +185,33 @@ export default function LoginPage() {
                                     initial={{ opacity: 0, height: 0 }}
                                     animate={{ opacity: 1, height: "auto" }}
                                     exit={{ opacity: 0, height: 0 }}
-                                    className="space-y-2"
+                                    className="space-y-4 overflow-hidden"
                                 >
-                                    <Label htmlFor="fullName">Full Name</Label>
-                                    <Input
-                                        id="fullName"
-                                        placeholder="John Doe"
-                                        value={fullName}
-                                        onChange={(e) => setFullName(e.target.value)}
-                                        required={isRegister}
-                                    />
+                                    <div className="space-y-2 pt-2">
+                                        <Label htmlFor="fullName">Full Name</Label>
+                                        <Input
+                                            id="fullName"
+                                            placeholder="John Doe"
+                                            value={fullName}
+                                            onChange={(e) => setFullName(e.target.value)}
+                                            required={isRegister}
+                                        />
+                                    </div>
+
+                                    {role === "teacher" && (
+                                        <div className="space-y-2 pb-2">
+                                            <Label htmlFor="accessCode">Teacher Access Code</Label>
+                                            <Input
+                                                id="accessCode"
+                                                type="password"
+                                                placeholder="Enter access code"
+                                                value={accessCode}
+                                                onChange={(e) => setAccessCode(e.target.value)}
+                                                required={isRegister && role === "teacher"}
+                                            />
+                                            <p className="text-xs text-muted-foreground">Required for teacher accounts.</p>
+                                        </div>
+                                    )}
                                 </motion.div>
                             )}
                         </AnimatePresence>

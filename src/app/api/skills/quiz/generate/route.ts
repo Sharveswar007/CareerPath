@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
         Do not include any text outside the JSON array.`;
 
         const completion = await groq.chat.completions.create({
-            model: "llama3-8b-8192",
+            model: "groq/compound-mini",
             messages: [{ role: "user", content: prompt }],
             temperature: 0.7,
             max_tokens: 2048,

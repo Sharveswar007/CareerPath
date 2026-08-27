@@ -300,7 +300,7 @@ async function callGroq(prompt: string, maxTokens: number, timeoutMs: number, ma
         try {
             const response = await Promise.race([
                 groq.chat.completions.create({
-                    model: "llama3-8b-8192",
+                    model: "groq/compound-mini",
                     messages: [
                         {
                             role: "system",

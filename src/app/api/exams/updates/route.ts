@@ -54,7 +54,7 @@ Make dates realistic based on typical ${examName} patterns.
 Return ONLY valid JSON array, no markdown.`;
 
         const response = await groq.chat.completions.create({
-            model: "llama3-8b-8192",
+            model: "groq/compound-mini",
             messages: [
                 {
                     role: "system",

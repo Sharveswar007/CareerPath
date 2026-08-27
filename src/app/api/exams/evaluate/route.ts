@@ -81,7 +81,7 @@ Return strict JSON:
 }`;
 
         const completion = await groq.chat.completions.create({
-            model: "llama3-8b-8192",
+            model: "groq/compound-mini",
             messages: [{ role: "user", content: prompt }],
             temperature: 0.2,
             response_format: { type: "json_object" },

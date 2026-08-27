@@ -169,6 +169,7 @@ export default function ProfilePage() {
     const [totalAssessments, setTotalAssessments] = useState(0);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const [violations, setViolations] = useState<ProctoringViolation[]>([]);
+    const [testSessions, setTestSessions] = useState<any[]>([]);
 
     const [editForm, setEditForm] = useState({
         full_name: "",
@@ -208,7 +209,7 @@ export default function ProfilePage() {
             setCurrentStreak(activityStats.currentStreak);
 
             // Load all data in parallel
-            const [profileRes, assessmentRes, gapRes, challengesRes, resumesRes, chatRes, allAssessmentsRes, violationsRes] = await Promise.all([
+            const [profileRes, assessmentRes, gapRes, challengesRes, resumesRes, chatRes, allAssessmentsRes, violationsRes, testSessionsRes] = await Promise.all([
                 supabase.from("profiles").select("*").eq("id", user.id).single(),
                 supabase
                     .from("user_assessments")
@@ -247,6 +248,12 @@ export default function ProfilePage() {
                     .select("*")
                     .eq("user_id", user.id)
                     .order("created_at", { ascending: false }),
+                (supabase as any)
+                    .from("test_sessions")
+                    .select("id, status, completed_at, test_id, tests(title, creator_id)")
+                    .eq("student_id", user.id)
+                    .eq("status", "completed")
+                    .order("completed_at", { ascending: false }),
             ]);
 
             if (profileRes.data) {
@@ -290,6 +297,18 @@ export default function ProfilePage() {
             if (chatRes.data) setChatSessions(chatRes.data.length);
             if (allAssessmentsRes.data) setTotalAssessments(allAssessmentsRes.data.length);
             if (violationsRes && violationsRes.data) setViolations(violationsRes.data);
+            
+            // Resolve test sessions and their creator names
+            const sessionsData = testSessionsRes?.data || [];
+            if (sessionsData.length > 0) {
+                const creatorIds = [...new Set(sessionsData.map((s: any) => s.tests?.creator_id).filter(Boolean))];
+                const { data: creators } = await supabase.from('profiles').select('id, full_name').in('id', creatorIds);
+                const resolvedSessions = sessionsData.map((s: any) => ({
+                    ...s,
+                    teacher_name: creators?.find(c => c.id === s.tests?.creator_id)?.full_name || 'Unknown Teacher'
+                }));
+                setTestSessions(resolvedSessions);
+            }
 
             setLoading(false);
         };
@@ -1075,6 +1094,40 @@ export default function ProfilePage() {
                                         </span>
                                     </div>
                                     <p className="text-sm font-medium">{violation.violation_reason}</p>
+                                </Card>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* Exam History */}
+                {testSessions.length > 0 && (
+                    <motion.div variants={itemVariants} className="mb-8">
+                        <h2 className="font-semibold mb-4 flex items-center gap-2 text-violet-500">
+                            <BookOpen className="h-5 w-5" />
+                            Completed Proctored Exams
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {testSessions.map((session) => (
+                                <Card key={session.id} className="p-5 border-border/50 bg-card/50 flex flex-col justify-between">
+                                    <div>
+                                        <div className="flex justify-between items-start mb-2">
+                                            <h3 className="font-bold text-lg">{session.tests?.title || 'Assessment'}</h3>
+                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
+                                                Completed
+                                            </Badge>
+                                        </div>
+                                        <div className="space-y-2 mt-4 text-sm text-muted-foreground">
+                                            <p className="flex items-center gap-2">
+                                                <Calendar className="h-4 w-4 text-violet-500" />
+                                                {new Date(session.completed_at).toLocaleString()}
+                                            </p>
+                                            <p className="flex items-center gap-2">
+                                                <User className="h-4 w-4 text-violet-500" />
+                                                Conducted by: <span className="font-medium text-foreground">{session.teacher_name}</span>
+                                            </p>
+                                        </div>
+                                    </div>
                                 </Card>
                             ))}
                         </div>

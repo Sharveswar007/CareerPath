@@ -7,8 +7,10 @@ import Editor from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { executeCode, normalizeLanguage } from "@/lib/execution";
-import { Loader2, Play, Send, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { executeCode, normalizeLanguage } from "@/lib/execution/index";
+import { Loader2, Play, Send, AlertTriangle, CheckCircle2, XCircle, Code2, ShieldAlert } from "lucide-react";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function TestSessionPage() {
     const params = useParams<{ code: string }>();
@@ -18,10 +20,12 @@ export default function TestSessionPage() {
     const [questions, setQuestions] = useState<any[]>([]);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, any>>({});
+    const [selectedLanguages, setSelectedLanguages] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
+    const [hasStarted, setHasStarted] = useState(false);
 
-    const { isFullscreen, requestFullscreen, exitFullscreen } = useProctoring({
+    const { isFullscreen, startProctoring, exitFullscreen } = useProctoring({
         onViolation: (count, reason) => {
             toast.error(`Proctoring Alert: ${reason}`);
         }
@@ -78,10 +82,15 @@ export default function TestSessionPage() {
 
             if (!qError && qData) {
                 setQuestions(qData);
+                // Initialize default languages for coding questions
+                const initialLanguages: Record<string, string> = {};
+                qData.forEach(q => {
+                    if (q.type === 'coding') {
+                        initialLanguages[q.id] = 'javascript';
+                    }
+                });
+                setSelectedLanguages(initialLanguages);
             }
-
-            // Start proctoring
-            requestFullscreen();
         };
 
         loadTest();
@@ -99,17 +108,25 @@ export default function TestSessionPage() {
         }));
     };
 
+    const handleLanguageChange = (questionId: string, language: string) => {
+        setSelectedLanguages(prev => ({
+            ...prev,
+            [questionId]: language
+        }));
+    };
+
     const handleRunCode = async (question: any) => {
-        const studentCode = answers[question.id] || question.content.starter_code?.javascript || "";
+        const lang = selectedLanguages[question.id] || 'javascript';
+        const studentCode = answers[question.id] || question.content.starter_code?.[lang] || "";
         const visibleTestCases = question.test_cases?.filter((tc: any) => !tc.is_hidden) || [];
         
         let passed = 0;
         let results = [];
 
-        toast.info("Running code against visible test cases...");
+        toast.info(`Running ${lang} code against visible test cases...`);
 
         for (const tc of visibleTestCases) {
-            const result = await executeCode(studentCode, 'javascript', tc.input);
+            const result = await executeCode(studentCode, lang, tc.input);
             const isCorrect = result.success && result.output.trim() === tc.expected.trim();
             if (isCorrect) passed++;
             
@@ -155,15 +172,14 @@ export default function TestSessionPage() {
                     isCorrect = studentAnswer === q.answer?.correct_answer;
                     score = isCorrect ? 1 : 0;
                 } else if (q.type === 'coding') {
-                    // Actual evaluation of all test cases will happen on the backend or via evaluation endpoint
-                    // For now, save the raw code submission
+                    // Score evaluation against hidden test cases happens securely on backend
                 }
 
                 return {
                     session_id: sessionId,
                     question_id: q.id,
                     student_answer: studentAnswer,
-                    code_submission: q.type === 'coding' ? studentAnswer : null,
+                    code_submission: q.type === 'coding' ? { code: studentAnswer, language: selectedLanguages[q.id] } : null,
                     is_correct: isCorrect,
                     score: score
                 };
@@ -187,7 +203,14 @@ export default function TestSessionPage() {
             console.error("Submission Error", error);
             toast.error("Failed to submit exam. Please try again.");
             setIsSubmitting(false);
-            requestFullscreen(); // Restart if failed
+            if (hasStarted) startProctoring(); // Restart if failed
+        }
+    };
+
+    const handleStartExam = async () => {
+        const success = await startProctoring();
+        if (success) {
+            setHasStarted(true);
         }
     };
 
@@ -200,6 +223,35 @@ export default function TestSessionPage() {
     }
 
     const currentQuestion = questions[currentQuestionIndex];
+
+    if (!hasStarted) {
+        return (
+            <div className="flex flex-col h-screen bg-background items-center justify-center p-6">
+                <Card className="max-w-md w-full p-8 flex flex-col items-center text-center space-y-6">
+                    <div className="w-16 h-16 bg-violet-500/10 rounded-full flex items-center justify-center text-violet-500">
+                        <ShieldAlert className="w-8 h-8" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-bold">Proctored Examination</h2>
+                        <p className="text-muted-foreground mt-2">
+                            This test is strictly proctored. You must grant Camera and Microphone permissions, and the test will lock into Fullscreen mode.
+                        </p>
+                    </div>
+                    <div className="bg-destructive/10 text-destructive text-sm p-4 rounded-xl text-left w-full">
+                        <ul className="list-disc pl-5 space-y-1">
+                            <li>Do not exit fullscreen.</li>
+                            <li>Do not switch tabs or open other apps.</li>
+                            <li>Copy-pasting is disabled.</li>
+                            <li>Your camera and mic must remain active.</li>
+                        </ul>
+                    </div>
+                    <Button onClick={handleStartExam} size="lg" className="w-full">
+                        Grant Permissions & Start
+                    </Button>
+                </Card>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col h-screen bg-background">
@@ -243,7 +295,11 @@ export default function TestSessionPage() {
 
                         {currentQuestion.type === 'mcq' && (
                             <div className="space-y-6">
-                                <h2 className="text-2xl font-semibold">{currentQuestion.content.question}</h2>
+                                <h2 className="text-2xl font-semibold">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                        {currentQuestion.content.question}
+                                    </ReactMarkdown>
+                                </h2>
                                 <div className="space-y-3">
                                     {currentQuestion.content.options.map((option: string, idx: number) => (
                                         <button
@@ -265,18 +321,33 @@ export default function TestSessionPage() {
                         {currentQuestion.type === 'fill_in_blank' && (
                             <div className="space-y-6">
                                 <h2 className="text-2xl font-semibold">Complete the code</h2>
-                                <div className="bg-muted p-6 rounded-xl font-mono text-sm whitespace-pre">
+                                <div className="bg-muted p-6 rounded-xl font-mono text-sm whitespace-pre overflow-x-auto border">
                                     {currentQuestion.content.code_snippet}
                                 </div>
-                                <div>
-                                    <label className="text-sm font-medium mb-2 block">Your Answer:</label>
-                                    <input 
-                                        type="text" 
-                                        className="w-full p-4 rounded-xl bg-background border border-border focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all font-mono"
-                                        placeholder="Type the missing code here..."
-                                        value={answers[currentQuestion.id] || ''}
-                                        onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
-                                    />
+                                <div className="pt-4">
+                                    <label className="text-sm font-medium mb-3 block text-violet-400 flex items-center">
+                                        <Code2 className="w-4 h-4 mr-2" />
+                                        Write your missing code here
+                                    </label>
+                                    <div className="border rounded-xl overflow-hidden ring-1 ring-border focus-within:ring-violet-500 transition-all">
+                                        <Editor
+                                            height="150px"
+                                            language="javascript"
+                                            theme="vs-dark"
+                                            value={answers[currentQuestion.id] || ''}
+                                            onChange={(val) => handleAnswerChange(currentQuestion.id, val)}
+                                            options={{
+                                                minimap: { enabled: false },
+                                                fontSize: 14,
+                                                lineHeight: 1.6,
+                                                padding: { top: 16, bottom: 16 },
+                                                scrollBeyondLastLine: false,
+                                                lineNumbers: "off",
+                                                folding: false,
+                                                glyphMargin: false
+                                            }}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -285,15 +356,36 @@ export default function TestSessionPage() {
                             <div className="space-y-6 flex flex-col h-full min-h-[500px]">
                                 <div>
                                     <h2 className="text-2xl font-semibold">{currentQuestion.content.title}</h2>
-                                    <p className="text-muted-foreground mt-2">{currentQuestion.content.description}</p>
+                                    <div className="text-muted-foreground mt-4 prose prose-invert max-w-none">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                            {currentQuestion.content.description}
+                                        </ReactMarkdown>
+                                    </div>
                                 </div>
                                 
-                                <div className="flex-1 border rounded-xl overflow-hidden relative">
+                                <div className="flex items-center justify-between mt-4">
+                                    <label className="text-sm font-medium flex items-center text-violet-400">
+                                        <Code2 className="w-4 h-4 mr-2" />
+                                        Code Editor
+                                    </label>
+                                    <select 
+                                        value={selectedLanguages[currentQuestion.id] || 'javascript'}
+                                        onChange={(e) => handleLanguageChange(currentQuestion.id, e.target.value)}
+                                        className="bg-background border border-border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-violet-500"
+                                    >
+                                        <option value="javascript">JavaScript (Node.js)</option>
+                                        <option value="python">Python</option>
+                                        <option value="java">Java</option>
+                                        <option value="cpp">C++</option>
+                                    </select>
+                                </div>
+
+                                <div className="flex-1 border rounded-xl overflow-hidden relative shadow-lg">
                                     <Editor
                                         height="400px"
-                                        language="javascript"
+                                        language={selectedLanguages[currentQuestion.id] || 'javascript'}
                                         theme="vs-dark"
-                                        value={answers[currentQuestion.id] ?? currentQuestion.content.starter_code?.javascript}
+                                        value={answers[currentQuestion.id] ?? currentQuestion.content.starter_code?.[selectedLanguages[currentQuestion.id] || 'javascript'] ?? ''}
                                         onChange={(val) => handleAnswerChange(currentQuestion.id, val)}
                                         options={{
                                             minimap: { enabled: false },

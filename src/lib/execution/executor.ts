@@ -129,7 +129,7 @@ export async function executeCode(
 }
 
 // Wrap Python code to auto-call user's function with test input
-function wrapPythonCode(code: string, testInput: string): string {
+export function wrapPythonCode(code: string, testInput: string): string {
     const escapedInput = testInput.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
 
     return `
@@ -243,7 +243,7 @@ if _new_funcs:
 }
 
 // Wrap JavaScript code to auto-call user's function with test input
-function wrapJavaScriptCode(code: string, testInput: string): string {
+export function wrapJavaScriptCode(code: string, testInput: string): string {
     const escapedInput = testInput.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
 
     return `

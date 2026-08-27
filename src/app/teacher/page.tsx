@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Users, FileQuestion, Plus, Loader2, Play, User, Key, Calendar, Download, Target, Trophy, Mail, Phone, BookOpen } from "lucide-react";
+import { Users, FileQuestion, Plus, Loader2, Play, User, Key, Calendar, Download, Target, Trophy, Mail, Phone, BookOpen, Trash2, CheckCircle2, XCircle, ChevronRight, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TestBuilder, CustomQuestion } from "@/components/teacher/TestBuilder";
@@ -37,6 +37,8 @@ export default function TeacherDashboard() {
 
     // Student Detail State
     const [selectedStudent, setSelectedStudent] = useState<any>(null);
+    const [selectedSession, setSelectedSession] = useState<any>(null);
+    const [sessionDetails, setSessionDetails] = useState<any>(null);
 
     useEffect(() => {
         const init = async () => {
@@ -305,6 +307,50 @@ export default function TeacherDashboard() {
         }
     };
 
+    const deleteTest = async (testId: string) => {
+        if (!confirm("Are you sure you want to delete this exam? This will delete all student sessions and results. This cannot be undone.")) return;
+        
+        const supabase = createClient();
+        const sb = supabase as any;
+        try {
+            await sb.from('tests').delete().eq('id', testId);
+            toast.success("Exam deleted successfully");
+            fetchTests(supabase, teacher.id);
+        } catch (error) {
+            console.error("Delete test error:", error);
+            toast.error("Failed to delete exam");
+        }
+    };
+
+    const fetchSessionDetails = async (sessionId: string) => {
+        const supabase = createClient();
+        const sb = supabase as any;
+        
+        try {
+            // Fetch results
+            const { data: result } = await sb.from('test_results')
+                .select('*')
+                .eq('student_id', selectedSession.student_id)
+                .eq('test_id', activeTest.id)
+                .single();
+                
+            // Fetch submissions
+            const { data: submissions } = await sb.from('test_submissions')
+                .select('*, test_questions(type, content, test_cases)')
+                .eq('session_id', sessionId);
+                
+            setSessionDetails({ result, submissions });
+        } catch (error) {
+            console.error("Failed to fetch session details:", error);
+        }
+    };
+
+    useEffect(() => {
+        if (selectedSession) {
+            fetchSessionDetails(selectedSession.id);
+        }
+    }, [selectedSession]);
+
     if (loading) {
         return <div className="flex h-screen items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-violet-500" /></div>;
     }
@@ -536,9 +582,14 @@ export default function TeacherDashboard() {
                                                 Created: {new Date(test.created_at).toLocaleDateString()}
                                             </div>
                                         </div>
-                                        <Button className="w-full" variant={test.status === 'started' ? 'default' : 'outline'} onClick={() => openLiveDashboard(test)}>
-                                            Manage Session
-                                        </Button>
+                                        <div className="flex gap-2 w-full mt-auto">
+                                            <Button className="flex-1" variant={test.status === 'started' ? 'default' : 'outline'} onClick={() => openLiveDashboard(test)}>
+                                                Manage
+                                            </Button>
+                                            <Button variant="outline" className="text-destructive hover:bg-destructive hover:text-white" onClick={() => deleteTest(test.id)}>
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
                                     </Card>
                                 ))}
                             </div>
@@ -590,7 +641,7 @@ export default function TeacherDashboard() {
                                                 {liveSessions.map(session => (
                                                     <tr key={session.id} className="bg-card/50">
                                                         <td className="px-4 py-3 font-medium">{session.profiles?.full_name || 'Unknown Student'}</td>
-                                                        <td className="px-4 py-3 text-right">
+                                                        <td className="px-4 py-3 text-right flex items-center justify-end gap-2">
                                                             <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                                                                 session.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' :
                                                                 session.status === 'in_progress' ? 'bg-violet-500/10 text-violet-500' :
@@ -598,6 +649,11 @@ export default function TeacherDashboard() {
                                                             }`}>
                                                                 {session.status.toUpperCase()}
                                                             </span>
+                                                            {session.status === 'completed' && (
+                                                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setSelectedSession(session)}>
+                                                                    <Eye className="w-4 h-4 text-violet-500" />
+                                                                </Button>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 ))}
@@ -698,6 +754,87 @@ export default function TeacherDashboard() {
 
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Session Evaluation Details Modal */}
+            <Dialog open={!!selectedSession} onOpenChange={(open) => !open && setSelectedSession(null)}>
+                <DialogContent className="sm:max-w-[800px] border-border/50 bg-card/95 backdrop-blur-xl max-h-[90vh] flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle>Detailed Evaluation Report</DialogTitle>
+                        <DialogDescription>Review student performance for this specific exam session.</DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="flex-1 overflow-y-auto pr-2 py-4 space-y-6">
+                        {sessionDetails ? (
+                            <>
+                                {sessionDetails.result && (
+                                    <div className="bg-violet-500/10 border border-violet-500/20 p-6 rounded-xl flex items-center justify-between">
+                                        <div>
+                                            <h3 className="text-xl font-bold text-violet-400 mb-1">Final Score: {sessionDetails.result.total_score}%</h3>
+                                            <p className="text-sm text-muted-foreground flex items-center gap-2">
+                                                Skill Category: 
+                                                <span className="font-semibold text-foreground px-2 py-0.5 bg-background rounded-md border border-border">
+                                                    {sessionDetails.result.coding_category}
+                                                </span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="space-y-4">
+                                    <h3 className="font-semibold text-lg border-b border-border/50 pb-2">Question Breakdown</h3>
+                                    
+                                    {sessionDetails.submissions?.map((sub: any, idx: number) => {
+                                        const q = sub.test_questions;
+                                        const isCode = q.type === 'coding';
+                                        
+                                        // Calculate percentage for coding
+                                        let codingPercentage = 0;
+                                        if (isCode && q.test_cases?.length > 0) {
+                                            codingPercentage = Math.round((sub.score / q.test_cases.length) * 100);
+                                        }
+
+                                        return (
+                                            <div key={sub.id} className="bg-muted/30 border border-border/50 rounded-xl p-4 space-y-3">
+                                                <div className="flex justify-between items-start gap-4">
+                                                    <div className="flex-1">
+                                                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Question {idx + 1} ({q.type})</span>
+                                                        <p className="font-medium">{q.content?.question || q.content?.title || "Coding Challenge"}</p>
+                                                    </div>
+                                                    
+                                                    {isCode ? (
+                                                        <div className={`px-3 py-1 rounded-full text-xs font-bold border ${codingPercentage === 100 ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : codingPercentage > 0 ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'bg-destructive/10 text-destructive border-destructive/20'}`}>
+                                                            {codingPercentage === 100 ? 'Correct (100%)' : codingPercentage > 0 ? `Partial (${codingPercentage}%)` : 'Incorrect (0%)'}
+                                                        </div>
+                                                    ) : (
+                                                        <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${sub.is_correct ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-destructive/10 text-destructive border-destructive/20'}`}>
+                                                            {sub.is_correct ? <><CheckCircle2 className="w-3 h-3"/> Correct</> : <><XCircle className="w-3 h-3"/> Incorrect</>}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                
+                                                <div className="bg-background p-3 rounded-lg border border-border text-sm font-mono overflow-x-auto">
+                                                    <span className="text-muted-foreground text-xs block mb-1">Student's Answer:</span>
+                                                    {isCode ? (
+                                                        <pre className="text-violet-300">{sub.code_submission?.code || sub.student_answer || "No code submitted"}</pre>
+                                                    ) : (
+                                                        <span className="text-foreground">{sub.student_answer || "No answer provided"}</span>
+                                                    )}
+                                                </div>
+
+                                                {isCode && q.test_cases?.length > 0 && (
+                                                    <p className="text-xs text-muted-foreground">Passed {sub.score} out of {q.test_cases.length} test cases.</p>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex justify-center items-center py-20"><Loader2 className="w-8 h-8 animate-spin text-violet-500" /></div>
+                        )}
+                    </div>
                 </DialogContent>
             </Dialog>
 

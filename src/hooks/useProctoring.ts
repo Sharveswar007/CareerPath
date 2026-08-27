@@ -40,15 +40,31 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
         onViolationRef.current(newCount, reason);
     }, []); // No dependencies — everything is read from refs
 
-    const requestFullscreen = useCallback(async () => {
+    const startProctoring = useCallback(async (): Promise<boolean> => {
         try {
+            // First, mandate camera/microphone permissions
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            
+            // We have permission, immediately stop the tracks since we just needed the permission grant for now
+            stream.getTracks().forEach(track => track.stop());
+            
+            // Then, request fullscreen
             if (document.documentElement.requestFullscreen) {
                 await document.documentElement.requestFullscreen();
                 setIsFullscreen(true);
                 isFullscreenRef.current = true;
+                return true;
             }
-        } catch (err) {
-            console.error("Error attempting to enable fullscreen:", err);
+            return false;
+        } catch (err: any) {
+            console.error("Proctoring setup failed:", err);
+            // Don't trigger a violation for failing to start, just prevent them from starting
+            if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
+                 toast.error("Camera and Microphone permissions are required to start the exam.");
+            } else {
+                 toast.error("Failed to enter fullscreen or access media devices.");
+            }
+            return false;
         }
     }, []);
 
@@ -144,7 +160,7 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
     return {
         isFullscreen,
         violations,
-        requestFullscreen,
+        startProctoring,
         exitFullscreen
     };
 }

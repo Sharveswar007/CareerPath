@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import Groq from "groq-sdk";
 import { createClient } from "@/lib/supabase/server";
+import { executeCodeViaBackend } from "@/lib/backends/execution-service";
+import { wrapPythonCode, wrapJavaScriptCode, normalizeLanguage } from "@/lib/execution/executor";
 
 export const runtime = "nodejs";
 
@@ -19,7 +21,7 @@ export async function POST(request: NextRequest) {
         const supabase = await createClient();
 
         // 1. Fetch Session and Test Info
-const sb = supabase as any;
+        const sb = supabase as any;
         const { data: sessionData, error: sessionError } = await sb.from("test_sessions").select("test_id, student_id, tests(generation_type)").eq("id", session_id).single();
 
         if (sessionError || !sessionData) {
@@ -38,19 +40,43 @@ const sb = supabase as any;
             return NextResponse.json({ error: "Failed to fetch submissions" }, { status: 500 });
         }
 
-        // 3. Prepare data for Groq evaluation
         const mcqs = submissions.filter((s: any) => s.test_questions.type === 'mcq');
         const fibs = submissions.filter((s: any) => s.test_questions.type === 'fill_in_blank');
         const coding = submissions.filter((s: any) => s.test_questions.type === 'coding');
 
+        // Execute coding questions securely against test cases
+        for (const sub of coding) {
+            const codeSub = sub.code_submission as any;
+            if (!codeSub || !codeSub.code) continue;
+            
+            const studentCode = codeSub.code;
+            const lang = normalizeLanguage(codeSub.language || 'javascript');
+            const testCases = sub.test_questions.test_cases || [];
+            
+            let passed = 0;
+            
+            for (const tc of testCases) {
+                let wrappedCode = studentCode;
+                if (lang === 'python') wrappedCode = wrapPythonCode(studentCode, tc.input);
+                if (lang === 'javascript') wrappedCode = wrapJavaScriptCode(studentCode, tc.input);
+                
+                const result = await executeCodeViaBackend(wrappedCode, lang, tc.input);
+                if (result.success && result.output.trim() === tc.expected.trim()) {
+                    passed++;
+                }
+            }
+            
+            sub.score = passed; 
+            await sb.from("test_submissions").update({ score: passed }).eq("id", sub.id);
+        }
+
         const mcqScore = mcqs.filter((s: any) => s.is_correct).length;
         const totalMcqs = mcqs.length;
 
-        // Simplify coding submissions for prompt
         const codingSummary = coding.map((s: any) => ({
             title: s.test_questions.content.title,
-            student_code: s.code_submission,
-            test_cases_passed: s.score || 0, // Assuming score holds the number of passed test cases
+            student_code: s.code_submission?.code || "",
+            test_cases_passed: s.score || 0,
             total_test_cases: s.test_questions.test_cases?.length || 10
         }));
 
@@ -87,7 +113,14 @@ Return strict JSON:
             response_format: { type: "json_object" },
         });
 
-        const content = completion.choices[0]?.message?.content || "{}";
+        let content = completion.choices[0]?.message?.content || "{}";
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            content = jsonMatch[0];
+        } else {
+            content = "{}";
+        }
+        
         const evaluation = JSON.parse(content);
 
         // 4. Save Results

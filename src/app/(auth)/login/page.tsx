@@ -119,7 +119,14 @@ export default function LoginPage() {
                 if (error) throw error;
 
                 toast.success("Signed in successfully!");
-                const userRole = data.user?.user_metadata?.role || "student";
+                // Fetch role directly from profile to ensure accuracy
+                const { data: profile } = await supabase
+                    .from("profiles")
+                    .select("role")
+                    .eq("id", data.user.id)
+                    .single();
+                    
+                const userRole = profile?.role || data.user?.user_metadata?.role || "student";
                 if (userRole === "teacher") {
                     router.push("/teacher");
                 } else {

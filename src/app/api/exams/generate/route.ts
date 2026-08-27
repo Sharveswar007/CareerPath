@@ -66,8 +66,13 @@ Return strict JSON structure:
 
         let content = completion.choices[0]?.message?.content || "{}";
         
-        // Strip markdown code blocks if the model wrapped the JSON output
-        content = content.replace(/```json/gi, '').replace(/```/g, '').trim();
+        // Robust JSON extraction to ignore any preamble/postamble text
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            content = jsonMatch[0];
+        } else {
+            content = "{}";
+        }
         
         let generatedTest;
         try {

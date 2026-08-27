@@ -313,12 +313,39 @@ export default function TeacherDashboard() {
         const supabase = createClient();
         const sb = supabase as any;
         try {
-            await sb.from('tests').delete().eq('id', testId);
+            // 1. Get all sessions for this test
+            const { data: sessions, error: sessionsError } = await sb.from('test_sessions').select('id').eq('test_id', testId);
+            if (sessionsError) throw sessionsError;
+
+            const sessionIds = sessions?.map((s: any) => s.id) || [];
+
+            // 2. Delete submissions for these sessions
+            if (sessionIds.length > 0) {
+                const { error: subError } = await sb.from('test_submissions').delete().in('session_id', sessionIds);
+                if (subError) throw subError;
+            }
+
+            // 3. Delete results
+            const { error: resError } = await sb.from('test_results').delete().eq('test_id', testId);
+            if (resError) throw resError;
+
+            // 4. Delete sessions
+            const { error: sessDeleteError } = await sb.from('test_sessions').delete().eq('test_id', testId);
+            if (sessDeleteError) throw sessDeleteError;
+
+            // 5. Delete questions
+            const { error: qError } = await sb.from('test_questions').delete().eq('test_id', testId);
+            if (qError) throw qError;
+
+            // 6. Delete the test
+            const { error: testError } = await sb.from('tests').delete().eq('id', testId);
+            if (testError) throw testError;
+
             toast.success("Exam deleted successfully");
             fetchTests(supabase, teacher.id);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Delete test error:", error);
-            toast.error("Failed to delete exam");
+            toast.error("Failed to delete exam: " + (error.message || "Unknown error"));
         }
     };
 

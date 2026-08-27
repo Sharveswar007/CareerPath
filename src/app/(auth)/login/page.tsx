@@ -99,7 +99,7 @@ export default function LoginPage() {
                 if (data.session) {
                     toast.success("Account created successfully!");
                     if (role === "teacher") {
-                        router.push("/teacher/dashboard");
+                        router.push("/teacher");
                     } else {
                         router.push("/dashboard");
                     }
@@ -121,7 +121,7 @@ export default function LoginPage() {
                 toast.success("Signed in successfully!");
                 const userRole = data.user?.user_metadata?.role || "student";
                 if (userRole === "teacher") {
-                    router.push("/teacher/dashboard");
+                    router.push("/teacher");
                 } else {
                     router.push("/dashboard"); 
                 }

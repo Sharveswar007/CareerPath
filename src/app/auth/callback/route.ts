@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
                 .single() as { data: { onboarding_complete: boolean, role: string } | null };
 
             if (profile?.role === 'teacher') {
-                return NextResponse.redirect(`${origin}/teacher/dashboard`);
+                return NextResponse.redirect(`${origin}/teacher`);
             }
 
             if (profile?.onboarding_complete) {

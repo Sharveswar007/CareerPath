@@ -51,7 +51,7 @@ export async function updateSession(request: NextRequest) {
         request.nextUrl.pathname.startsWith("/register")) {
         if (user) {
             if (user.user_metadata?.role === 'teacher') {
-                return NextResponse.redirect(new URL("/teacher/dashboard", request.url));
+                return NextResponse.redirect(new URL("/teacher", request.url));
             }
             return NextResponse.redirect(new URL("/dashboard", request.url));
         }

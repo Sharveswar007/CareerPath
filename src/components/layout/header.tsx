@@ -53,8 +53,8 @@ export function Header() {
         setTheme(theme === "dark" ? "light" : "dark");
     };
 
-    // Hide header on login and onboarding pages
-    if (pathname?.startsWith("/login") || pathname?.startsWith("/onboarding")) {
+    // Hide header on login, onboarding, and teacher pages
+    if (pathname?.startsWith("/login") || pathname?.startsWith("/onboarding") || pathname?.startsWith("/teacher")) {
         return null;
     }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { toast } from "sonner";
 
 interface UseProctoringOptions {
     onViolation: (violationCount: number, reason: string) => void;

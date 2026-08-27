@@ -111,7 +111,7 @@ export default function AIQuizPage() {
         });
     };
 
-    const { isFullscreen, violations, requestFullscreen, exitFullscreen } = useProctoring({
+    const { isFullscreen, violations, startProctoring, exitFullscreen } = useProctoring({
         onViolation: handleViolation,
         maxViolations: MAX_VIOLATIONS,
         enabled: examStarted && !showResults && !isKicked, // Disable proctoring once kicked
@@ -509,7 +509,7 @@ export default function AIQuizPage() {
                         size="lg" 
                         className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-lg py-6"
                         onClick={() => {
-                            requestFullscreen();
+                            startProctoring();
                             setExamStarted(true);
                         }}
                     >
@@ -554,7 +554,7 @@ export default function AIQuizPage() {
                                 className="w-full"
                                 onClick={() => {
                                     setShowProctorWarning(false);
-                                    if (!isFullscreen) requestFullscreen();
+                                    if (!isFullscreen) startProctoring();
                                 }}
                             >
                                 Resume Exam

@@ -50,7 +50,10 @@ export async function updateSession(request: NextRequest) {
     if (request.nextUrl.pathname.startsWith("/login") ||
         request.nextUrl.pathname.startsWith("/register")) {
         if (user) {
-            return NextResponse.redirect(new URL("/chat", request.url));
+            if (user.user_metadata?.role === 'teacher') {
+                return NextResponse.redirect(new URL("/teacher/dashboard", request.url));
+            }
+            return NextResponse.redirect(new URL("/dashboard", request.url));
         }
     }
 

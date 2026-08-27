@@ -12,13 +12,16 @@ export async function GET(request: NextRequest) {
         const { error, data } = await supabase.auth.exchangeCodeForSession(code);
 
         if (!error && data.user) {
-            // Check onboarding status
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const { data: profile } = await (supabase as any)
                 .from("profiles")
-                .select("onboarding_complete")
+                .select("onboarding_complete, role")
                 .eq("id", data.user.id)
-                .single() as { data: { onboarding_complete: boolean } | null };
+                .single() as { data: { onboarding_complete: boolean, role: string } | null };
+
+            if (profile?.role === 'teacher') {
+                return NextResponse.redirect(`${origin}/teacher/dashboard`);
+            }
 
             if (profile?.onboarding_complete) {
                 return NextResponse.redirect(`${origin}/profile`);

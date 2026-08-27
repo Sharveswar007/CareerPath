@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Users, FileQuestion, Plus, Loader2, Play, CheckCircle2, User, Key, Calendar } from "lucide-react";
+import { Users, FileQuestion, Plus, Loader2, Play, User, Key, Calendar, Download, Target, Trophy, Mail, Phone, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -19,6 +19,7 @@ export default function TeacherDashboard() {
     const [teacher, setTeacher] = useState<any>(null);
     const [tests, setTests] = useState<any[]>([]);
     const [students, setStudents] = useState<any[]>([]);
+    const [testResults, setTestResults] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isCreatingTest, setIsCreatingTest] = useState(false);
     
@@ -32,6 +33,9 @@ export default function TeacherDashboard() {
     const [liveTestModalOpen, setLiveTestModalOpen] = useState(false);
     const [activeTest, setActiveTest] = useState<any>(null);
     const [liveSessions, setLiveSessions] = useState<any[]>([]);
+
+    // Student Detail State
+    const [selectedStudent, setSelectedStudent] = useState<any>(null);
 
     useEffect(() => {
         const init = async () => {
@@ -50,8 +54,10 @@ export default function TeacherDashboard() {
             }
 
             setTeacher(session.user);
-            fetchTests(supabase, session.user.id);
-            fetchStudents(supabase, session.user.email || "");
+            await Promise.all([
+                fetchTests(supabase, session.user.id),
+                fetchStudents(supabase, session.user.email || "")
+            ]);
             setLoading(false);
         };
         init();
@@ -68,11 +74,72 @@ export default function TeacherDashboard() {
 
     const fetchStudents = async (supabase: any, teacherEmail: string) => {
         const sb = supabase as any;
-        const { data } = await sb.from('profiles')
+        
+        // 1. Fetch Students
+        const { data: studentData } = await sb.from('profiles')
             .select('*')
             .eq('faculty_advisor_email', teacherEmail);
-        if (data) setStudents(data);
+            
+        if (studentData) {
+            setStudents(studentData);
+            
+            // 2. Fetch their test results for analytics
+            const studentIds = studentData.map((s: any) => s.id);
+            if (studentIds.length > 0) {
+                const { data: resultsData } = await sb.from('test_results')
+                    .select('*, tests(title)')
+                    .in('student_id', studentIds);
+                
+                if (resultsData) setTestResults(resultsData);
+            }
+        }
     };
+
+    // --- Analytics Calculations ---
+    const getStudentStats = (studentId: string) => {
+        const studentTests = testResults.filter(tr => tr.student_id === studentId);
+        const totalAssessments = studentTests.length;
+        const avgScore = totalAssessments > 0 
+            ? Math.round(studentTests.reduce((acc, curr) => acc + (curr.total_score || 0), 0) / totalAssessments)
+            : 0;
+        return { totalAssessments, avgScore, history: studentTests };
+    };
+
+    const globalStats = {
+        totalStudents: students.length,
+        totalAssessments: testResults.length,
+        avgScore: testResults.length > 0 
+            ? Math.round(testResults.reduce((acc, curr) => acc + (curr.total_score || 0), 0) / testResults.length)
+            : 0
+    };
+
+    // --- CSV Export ---
+    const exportCSV = () => {
+        const headers = ["Student Name", "Email", "College", "Average Score", "Total Assessments"];
+        const rows = students.map(student => {
+            const stats = getStudentStats(student.id);
+            return [
+                student.full_name || 'Unknown',
+                student.email,
+                student.college || '-',
+                stats.avgScore,
+                stats.totalAssessments
+            ];
+        });
+
+        const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `student_analytics_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success("CSV Exported successfully!");
+    };
+
 
     const handleCreateTest = async () => {
         setIsCreatingTest(true);
@@ -132,17 +199,14 @@ export default function TeacherDashboard() {
         const supabase = createClient();
         const sb = supabase as any;
 
-        // Fetch initial sessions
         const { data: sessions } = await sb.from('test_sessions')
             .select('id, student_id, status, profiles(full_name)')
             .eq('test_id', test.id);
         
         if (sessions) setLiveSessions(sessions);
 
-        // Subscribe to changes
         sb.channel(`live-test-${test.id}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'test_sessions', filter: `test_id=eq.${test.id}` }, (payload: any) => {
-                // Refetch sessions for simplicity
                 sb.from('test_sessions')
                     .select('id, student_id, status, profiles(full_name)')
                     .eq('test_id', test.id)
@@ -189,15 +253,103 @@ export default function TeacherDashboard() {
             </header>
 
             <main className="flex-1 max-w-6xl w-full mx-auto p-6 mt-6">
-                <Tabs defaultValue="tests" className="w-full">
+                <Tabs defaultValue="students" className="w-full">
                     <TabsList className="mb-8 bg-muted/50 p-1 rounded-xl">
-                        <TabsTrigger value="tests" className="rounded-lg px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                            <FileQuestion className="w-4 h-4 mr-2" /> Tests
-                        </TabsTrigger>
                         <TabsTrigger value="students" className="rounded-lg px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                            <User className="w-4 h-4 mr-2" /> Students
+                            <User className="w-4 h-4 mr-2" /> Students & Analytics
+                        </TabsTrigger>
+                        <TabsTrigger value="tests" className="rounded-lg px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                            <FileQuestion className="w-4 h-4 mr-2" /> Manage Tests
                         </TabsTrigger>
                     </TabsList>
+
+                    <TabsContent value="students" className="space-y-6">
+                        
+                        {/* Analytics Row */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                            <Card className="p-6 bg-card/50 border-border/50 flex flex-col justify-center">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-blue-500/10 text-blue-500 rounded-lg"><Users className="w-6 h-6" /></div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground font-medium">Total Students</p>
+                                        <h3 className="text-3xl font-bold">{globalStats.totalStudents}</h3>
+                                    </div>
+                                </div>
+                            </Card>
+                            <Card className="p-6 bg-card/50 border-border/50 flex flex-col justify-center">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-violet-500/10 text-violet-500 rounded-lg"><Target className="w-6 h-6" /></div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground font-medium">Average Score</p>
+                                        <h3 className="text-3xl font-bold">{globalStats.avgScore} <span className="text-sm text-muted-foreground font-normal">pts</span></h3>
+                                    </div>
+                                </div>
+                            </Card>
+                            <Card className="p-6 bg-card/50 border-border/50 flex flex-col justify-center">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-emerald-500/10 text-emerald-500 rounded-lg"><Trophy className="w-6 h-6" /></div>
+                                    <div>
+                                        <p className="text-sm text-muted-foreground font-medium">Total Assessments</p>
+                                        <h3 className="text-3xl font-bold">{globalStats.totalAssessments}</h3>
+                                    </div>
+                                </div>
+                            </Card>
+                        </div>
+
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-semibold">Student Roster</h2>
+                            <Button variant="outline" onClick={exportCSV} className="border-border">
+                                <Download className="w-4 h-4 mr-2" /> Export CSV
+                            </Button>
+                        </div>
+
+                        {students.length === 0 ? (
+                            <div className="text-center py-20 bg-muted/20 rounded-2xl border border-dashed border-border/50">
+                                <Users className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
+                                <h3 className="text-lg font-medium">No students registered yet</h3>
+                                <p className="text-muted-foreground mt-1">Students will appear here once they sign up and assign you as their faculty advisor.</p>
+                            </div>
+                        ) : (
+                            <div className="border border-border/50 rounded-xl overflow-hidden bg-card/50">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-muted/50 text-muted-foreground text-xs uppercase">
+                                        <tr>
+                                            <th className="px-6 py-4 font-medium">Student Name</th>
+                                            <th className="px-6 py-4 font-medium">Email</th>
+                                            <th className="px-6 py-4 font-medium">College</th>
+                                            <th className="px-6 py-4 font-medium">Avg Score</th>
+                                            <th className="px-6 py-4 font-medium">Assessments</th>
+                                            <th className="px-6 py-4 font-medium text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border/50">
+                                        {students.map(student => {
+                                            const stats = getStudentStats(student.id);
+                                            return (
+                                                <tr key={student.id} className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setSelectedStudent(student)}>
+                                                    <td className="px-6 py-4 font-medium flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-violet-500/20 text-violet-500 flex items-center justify-center font-bold text-xs uppercase">
+                                                            {(student.full_name || 'U').substring(0,2)}
+                                                        </div>
+                                                        {student.full_name || 'Unknown'}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-muted-foreground">{student.email}</td>
+                                                    <td className="px-6 py-4">{student.college || '-'}</td>
+                                                    <td className="px-6 py-4">
+                                                        <span className="font-semibold">{stats.avgScore}</span> pts
+                                                    </td>
+                                                    <td className="px-6 py-4">{stats.totalAssessments}</td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedStudent(student); }}>View</Button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </TabsContent>
 
                     <TabsContent value="tests" className="space-y-6">
                         <div className="flex justify-between items-center mb-6">
@@ -311,40 +463,6 @@ export default function TeacherDashboard() {
                             </div>
                         )}
                     </TabsContent>
-
-                    <TabsContent value="students" className="space-y-6">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-semibold">Your Students</h2>
-                        </div>
-                        {students.length === 0 ? (
-                            <div className="text-center py-20 bg-muted/20 rounded-2xl border border-dashed border-border/50">
-                                <Users className="w-12 h-12 text-muted-foreground/50 mx-auto mb-4" />
-                                <h3 className="text-lg font-medium">No students registered yet</h3>
-                                <p className="text-muted-foreground mt-1">Students will appear here once they sign up and assign you as their faculty advisor.</p>
-                            </div>
-                        ) : (
-                            <div className="border border-border/50 rounded-xl overflow-hidden bg-card/50">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-muted/50 text-muted-foreground text-xs uppercase">
-                                        <tr>
-                                            <th className="px-6 py-4 font-medium">Student Name</th>
-                                            <th className="px-6 py-4 font-medium">Email</th>
-                                            <th className="px-6 py-4 font-medium">College</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border/50">
-                                        {students.map(student => (
-                                            <tr key={student.id} className="hover:bg-muted/30 transition-colors">
-                                                <td className="px-6 py-4 font-medium">{student.full_name || 'Unknown'}</td>
-                                                <td className="px-6 py-4 text-muted-foreground">{student.email}</td>
-                                                <td className="px-6 py-4">{student.college || '-'}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </TabsContent>
                 </Tabs>
             </main>
 
@@ -411,11 +529,101 @@ export default function TeacherDashboard() {
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* Student Details Modal */}
+            <Dialog open={!!selectedStudent} onOpenChange={(open) => !open && setSelectedStudent(null)}>
+                <DialogContent className="sm:max-w-[700px] border-border/50 bg-card/90 backdrop-blur-xl">
+                    <DialogHeader>
+                        <DialogTitle>Student Profile</DialogTitle>
+                    </DialogHeader>
+                    {selectedStudent && (
+                        <div className="py-4 space-y-6">
+                            
+                            {/* Profile Header */}
+                            <div className="flex items-center gap-4 bg-muted/30 p-4 rounded-xl border border-border/50">
+                                <div className="w-16 h-16 rounded-full bg-violet-500/20 text-violet-500 flex items-center justify-center text-xl font-bold uppercase">
+                                    {(selectedStudent.full_name || 'U').substring(0,2)}
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold">{selectedStudent.full_name || 'Unknown Student'}</h3>
+                                    <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                                        <span className="flex items-center gap-1"><Mail className="w-3 h-3" /> {selectedStudent.email}</span>
+                                        {selectedStudent.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {selectedStudent.phone}</span>}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <Tabs defaultValue="overview">
+                                <TabsList className="w-full bg-muted/50 rounded-lg p-1">
+                                    <TabsTrigger value="overview" className="flex-1 rounded-md">Overview</TabsTrigger>
+                                    <TabsTrigger value="history" className="flex-1 rounded-md">Test History</TabsTrigger>
+                                </TabsList>
+                                
+                                <TabsContent value="overview" className="space-y-4 mt-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2 p-4 bg-muted/30 rounded-lg border border-border/30">
+                                            <h4 className="font-semibold flex items-center gap-2"><BookOpen className="w-4 h-4" /> Academic Info</h4>
+                                            <div className="text-sm space-y-1">
+                                                <p><span className="text-muted-foreground">College:</span> {selectedStudent.college || 'N/A'}</p>
+                                                <p><span className="text-muted-foreground">Degree:</span> {selectedStudent.current_education || 'N/A'}</p>
+                                                <p><span className="text-muted-foreground">10th Marks:</span> {selectedStudent.tenth_marks || 'N/A'}</p>
+                                                <p><span className="text-muted-foreground">12th Marks:</span> {selectedStudent.twelfth_marks || 'N/A'}</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="space-y-2 p-4 bg-muted/30 rounded-lg border border-border/30">
+                                            <h4 className="font-semibold flex items-center gap-2"><Users className="w-4 h-4" /> Parent Details</h4>
+                                            <div className="text-sm space-y-1">
+                                                <p><span className="text-muted-foreground">Father:</span> {selectedStudent.father_name || 'N/A'}</p>
+                                                <p><span className="text-muted-foreground">Mother:</span> {selectedStudent.mother_name || 'N/A'}</p>
+                                                <p><span className="text-muted-foreground">Phone:</span> {selectedStudent.father_phone || selectedStudent.mother_phone || 'N/A'}</p>
+                                                <p><span className="text-muted-foreground">Email:</span> {selectedStudent.father_email || selectedStudent.mother_email || 'N/A'}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </TabsContent>
+                                
+                                <TabsContent value="history" className="mt-4">
+                                    <div className="border border-border/50 rounded-xl overflow-hidden max-h-[300px] overflow-y-auto">
+                                        {(() => {
+                                            const history = getStudentStats(selectedStudent.id).history;
+                                            if (history.length === 0) {
+                                                return <div className="p-8 text-center text-muted-foreground text-sm">No tests completed yet.</div>;
+                                            }
+                                            return (
+                                                <table className="w-full text-sm">
+                                                    <thead className="bg-muted/50 text-muted-foreground text-xs uppercase sticky top-0">
+                                                        <tr>
+                                                            <th className="px-4 py-3 font-medium text-left">Test Name</th>
+                                                            <th className="px-4 py-3 font-medium text-left">Date</th>
+                                                            <th className="px-4 py-3 font-medium text-right">Score</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-border/50">
+                                                        {history.map((result: any) => (
+                                                            <tr key={result.id} className="bg-card/50">
+                                                                <td className="px-4 py-3 font-medium">{result.tests?.title || 'Unknown Test'}</td>
+                                                                <td className="px-4 py-3 text-muted-foreground">{new Date(result.created_at).toLocaleDateString()}</td>
+                                                                <td className="px-4 py-3 text-right font-bold text-violet-500">{result.total_score} pts</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            );
+                                        })()}
+                                    </div>
+                                </TabsContent>
+                            </Tabs>
+
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
         </div>
     );
 }
 
-// Sparkles icon definition since we used it
 const Sparkles = ({ className }: { className?: string }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
         <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>

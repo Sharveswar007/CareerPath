@@ -64,6 +64,38 @@ export default function TeacherDashboard() {
         init();
     }, [router]);
 
+    // Live Test Polling
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (liveTestModalOpen && activeTest?.id) {
+            const fetchLiveStats = async () => {
+                const supabase = createClient();
+                const sb = supabase as any;
+                
+                const { data: sessions } = await sb.from('test_sessions')
+                    .select('id, student_id, status, profiles(full_name)')
+                    .eq('test_id', activeTest.id);
+                if (sessions) setLiveSessions(sessions);
+                
+                const { data: testInfo } = await sb.from('tests')
+                    .select('status')
+                    .eq('id', activeTest.id)
+                    .single();
+                if (testInfo && testInfo.status !== activeTest.status) {
+                    setActiveTest((prev: any) => ({ ...prev, status: testInfo.status }));
+                    fetchTests(supabase, teacher.id); // Refresh tests list in background
+                }
+            };
+            
+            interval = setInterval(fetchLiveStats, 1000);
+            fetchLiveStats(); // Initial fetch
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [liveTestModalOpen, activeTest?.id]); // Only re-run if modal opens or active test changes
+
+
     const fetchTests = async (supabase: any, teacherId: string) => {
         const sb = supabase as any;
         const { data } = await sb.from('tests')
@@ -240,30 +272,6 @@ export default function TeacherDashboard() {
         setActiveTest(test);
         setLiveTestModalOpen(true);
         setLiveSessions([]);
-
-        const supabase = createClient();
-        const sb = supabase as any;
-
-        const { data: sessions } = await sb.from('test_sessions')
-            .select('id, student_id, status, profiles(full_name)')
-            .eq('test_id', test.id);
-        
-        if (sessions) setLiveSessions(sessions);
-
-        sb.channel(`live-test-${test.id}`)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'test_sessions', filter: `test_id=eq.${test.id}` }, (payload: any) => {
-                sb.from('test_sessions')
-                    .select('id, student_id, status, profiles(full_name)')
-                    .eq('test_id', test.id)
-                    .then(({ data }: any) => {
-                        if (data) setLiveSessions(data);
-                    });
-            })
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tests', filter: `id=eq.${test.id}` }, (payload: any) => {
-                setActiveTest((prev: any) => ({ ...prev, status: payload.new.status }));
-                fetchTests(supabase, teacher.id);
-            })
-            .subscribe();
     };
 
     const updateTestStatus = async (status: string) => {

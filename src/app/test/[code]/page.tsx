@@ -13,14 +13,13 @@ export default function TestWaitingRoom() {
     const code = params.code?.toUpperCase() || "";
 
     useEffect(() => {
-        let subscription: any = null;
-        let sessionSubscription: any = null;
+        let interval: NodeJS.Timeout;
 
         const init = async () => {
             const { createClient } = await import("@/lib/supabase/client");
             const supabase = createClient();
 
-            // Fetch test details
+            // Fetch test details initially
             const { data: testData, error: testError } = await supabase
                 .from("tests")
                 .select("id, status")
@@ -38,48 +37,38 @@ export default function TestWaitingRoom() {
                 router.push(`/test/${code}/session`);
                 return;
             }
+            
+            const fetchStatus = async () => {
+                // Fetch student count
+                const { count } = await supabase
+                    .from("test_sessions")
+                    .select("*", { count: 'exact', head: true })
+                    .eq("test_id", testData.id)
+                    .eq("status", "joined");
+                
+                if (count !== null) setStudentCount(count);
 
-            // Fetch initial joined students count
-            const { count } = await supabase
-                .from("test_sessions")
-                .select("*", { count: 'exact', head: true })
-                .eq("test_id", testData.id)
-                .eq("status", "joined");
+                // Fetch test status
+                const { data: currentTest } = await supabase
+                    .from("tests")
+                    .select("status")
+                    .eq("id", testData.id)
+                    .single();
+                
+                if (currentTest?.status === 'started') {
+                    router.push(`/test/${code}/session`);
+                }
+            };
 
-            if (count) setStudentCount(count);
-
-            // Subscribe to test status changes
-            subscription = supabase
-                .channel(`test-status-${testData.id}`)
-                .on(
-                    'postgres_changes',
-                    { event: 'UPDATE', schema: 'public', table: 'tests', filter: `id=eq.${testData.id}` },
-                    (payload) => {
-                        if (payload.new.status === 'started') {
-                            router.push(`/test/${code}/session`);
-                        }
-                    }
-                )
-                .subscribe();
-
-            // Subscribe to new students joining
-            sessionSubscription = supabase
-                .channel(`test-sessions-${testData.id}`)
-                .on(
-                    'postgres_changes',
-                    { event: 'INSERT', schema: 'public', table: 'test_sessions', filter: `test_id=eq.${testData.id}` },
-                    () => {
-                        setStudentCount(prev => prev + 1);
-                    }
-                )
-                .subscribe();
+            // Call immediately and then set interval
+            fetchStatus();
+            interval = setInterval(fetchStatus, 1000);
         };
 
         init();
 
         return () => {
-            if (subscription) subscription.unsubscribe();
-            if (sessionSubscription) sessionSubscription.unsubscribe();
+            if (interval) clearInterval(interval);
         };
     }, [code, router]);
 

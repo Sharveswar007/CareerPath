@@ -73,9 +73,23 @@ export default function TeacherDashboard() {
                 const sb = supabase as any;
                 
                 const { data: sessions } = await sb.from('test_sessions')
-                    .select('id, student_id, status, profiles(full_name)')
+                    .select('id, student_id, status')
                     .eq('test_id', activeTest.id);
-                if (sessions) setLiveSessions(sessions);
+                
+                if (sessions && sessions.length > 0) {
+                    const studentIds = sessions.map((s: any) => s.student_id);
+                    const { data: profiles } = await sb.from('profiles')
+                        .select('id, full_name')
+                        .in('id', studentIds);
+                    
+                    const enrichedSessions = sessions.map((s: any) => ({
+                        ...s,
+                        profiles: profiles?.find((p: any) => p.id === s.student_id) || null
+                    }));
+                    setLiveSessions(enrichedSessions);
+                } else {
+                    setLiveSessions([]);
+                }
                 
                 const { data: testInfo } = await sb.from('tests')
                     .select('status')
@@ -207,7 +221,11 @@ export default function TeacherDashboard() {
                     difficulty: difficulty
                 })
             });
-            if (!res.ok) throw new Error("AI Generation failed");
+            
+            if (!res.ok) {
+                const errData = await res.json().catch(()=>({}));
+                throw new Error(errData.error || "AI Generation failed");
+            }
 
             toast.success("AI Test created successfully!");
             setCreateModalOpen(false);

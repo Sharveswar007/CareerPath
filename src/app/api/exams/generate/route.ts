@@ -64,13 +64,23 @@ Return strict JSON structure:
             response_format: { type: "json_object" },
         });
 
-        const content = completion.choices[0]?.message?.content || "{}";
-        const generatedTest = JSON.parse(content);
+        let content = completion.choices[0]?.message?.content || "{}";
+        
+        // Strip markdown code blocks if the model wrapped the JSON output
+        content = content.replace(/```json/gi, '').replace(/```/g, '').trim();
+        
+        let generatedTest;
+        try {
+            generatedTest = JSON.parse(content);
+        } catch (parseError) {
+            console.error("JSON Parse Error. Content:", content);
+            return NextResponse.json({ error: "Failed to parse AI output. Please try again." }, { status: 500 });
+        }
 
         const supabase = await createClient();
 
         // Map and insert MCQs
-        const mcqInserts = generatedTest.mcqs.map((q: any) => ({
+        const mcqInserts = (generatedTest.mcqs || []).map((q: any) => ({
             test_id,
             type: 'mcq',
             content: { question: q.question, options: q.options },
@@ -78,7 +88,7 @@ Return strict JSON structure:
         }));
 
         // Map and insert Fill in Blanks
-        const fibInserts = generatedTest.fill_in_blanks.map((q: any) => ({
+        const fibInserts = (generatedTest.fill_in_blanks || []).map((q: any) => ({
             test_id,
             type: 'fill_in_blank',
             content: { code_snippet: q.code_snippet },
@@ -86,27 +96,31 @@ Return strict JSON structure:
         }));
 
         // Map and insert Coding Questions
-        const codingInserts = generatedTest.coding_questions.map((q: any) => ({
+        const codingInserts = (generatedTest.coding_questions || []).map((q: any) => ({
             test_id,
             type: 'coding',
             content: { title: q.title, description: q.description, starter_code: q.starter_code },
-            test_cases: q.test_cases
+            test_cases: q.test_cases || []
         }));
 
         const allQuestions = [...mcqInserts, ...fibInserts, ...codingInserts];
+
+        if (allQuestions.length === 0) {
+            return NextResponse.json({ error: "AI failed to generate any valid questions." }, { status: 500 });
+        }
 
         const sb = supabase as any;
         const { error } = await sb.from("test_questions").insert(allQuestions);
 
         if (error) {
-            console.error("DB Insert Error", error);
-            return NextResponse.json({ error: error.message }, { status: 500 });
+            console.error("DB Insert Error:", error);
+            return NextResponse.json({ error: `Database Error: ${error.message}` }, { status: 500 });
         }
 
         return NextResponse.json({ success: true, count: allQuestions.length });
 
     } catch (error: any) {
         console.error("Test Gen Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: `Server Error: ${error.message}` }, { status: 500 });
     }
 }

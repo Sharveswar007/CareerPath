@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
                 if (lang === 'javascript') wrappedCode = wrapJavaScriptCode(studentCode, tc.input);
                 
                 const result = await executeCodeViaBackend(wrappedCode, lang, tc.input);
-                if (result.success && result.output.trim() === tc.expected.trim()) {
+                if (result.success && String(result.output).trim() === String(tc.expected).trim()) {
                     passed++;
                 }
             }

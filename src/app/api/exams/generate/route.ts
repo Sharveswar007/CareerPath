@@ -24,6 +24,7 @@ The test must strictly contain:
 2. 2 "Fill in the blank" code snippets.
 3. 2 Coding Sandbox Questions (Q1: Easy algorithm, Q2: Medium/Hard algorithm).
    - For EACH coding question, provide exactly 3 'visible' test cases and exactly 7 'hidden' test cases.
+   - The 'starter_code' MUST ONLY contain the empty function signature. DO NOT include the actual solution or implementation logic. Use comments like '// YOUR CODE HERE'.
 
 Return strict JSON structure:
 {
@@ -45,8 +46,8 @@ Return strict JSON structure:
             "title": "Problem Title",
             "description": "Markdown description...",
             "starter_code": {
-                "javascript": "function solve() {\\n\\n}",
-                "python": "def solve():\\n    pass"
+                "javascript": "function solve(args) {\\n    // YOUR CODE HERE\\n}",
+                "python": "def solve(args):\\n    # YOUR CODE HERE\\n    pass"
             },
             "test_cases": [
                 { "input": "[1, 2]", "expected": "3", "is_hidden": false },

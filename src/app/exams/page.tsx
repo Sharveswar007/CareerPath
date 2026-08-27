@@ -210,9 +210,7 @@ export default function ExamsPage() {
                 className="text-center mb-8"
             >
                 <div className="inline-flex items-center gap-3 mb-4">
-                    <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg">
-                        <GraduationCap className="h-6 w-6 text-white" />
-                    </div>
+
                     <div className="text-left">
                         <h1 className="text-2xl font-bold">Entrance Exam Updates</h1>
                         <p className="text-sm text-muted-foreground">

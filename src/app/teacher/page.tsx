@@ -136,7 +136,7 @@ export default function TeacherDashboard() {
             const studentIds = studentData.map((s: any) => s.id);
             if (studentIds.length > 0) {
                 const { data: resultsData } = await sb.from('test_results')
-                    .select('*, tests(title)')
+                    .select('*, tests(configuration, generation_type)')
                     .in('student_id', studentIds);
                 
                 if (resultsData) setTestResults(resultsData);
@@ -768,7 +768,7 @@ export default function TeacherDashboard() {
                                                     <tbody className="divide-y divide-border/50">
                                                         {history.map((result: any) => (
                                                             <tr key={result.id} className="bg-card/50">
-                                                                <td className="px-4 py-3 font-medium">{result.tests?.title || 'Unknown Test'}</td>
+                                                                <td className="px-4 py-3 font-medium">{result.tests?.configuration?.title || (result.tests?.generation_type === 'ai_generated' ? 'AI Assessment' : 'Custom Assessment')}</td>
                                                                 <td className="px-4 py-3 text-muted-foreground">{new Date(result.created_at).toLocaleDateString()}</td>
                                                                 <td className="px-4 py-3 text-right font-bold text-violet-500">{result.total_score} pts</td>
                                                             </tr>

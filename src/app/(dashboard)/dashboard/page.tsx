@@ -145,12 +145,7 @@ export default function DashboardPage() {
                 {/* Header */}
                 <motion.header variants={itemVariants} className="mb-8">
                     <div className="flex items-center gap-3 mb-2">
-                        <motion.div
-                            className="h-12 w-12 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg"
-                            whileHover={{ scale: 1.05, rotate: 5 }}
-                        >
-                            <Sparkles className="h-6 w-6 text-white" />
-                        </motion.div>
+
                         <div>
                             <h1 className="text-3xl font-bold">
                                 Welcome back, {user?.user_metadata?.full_name || "User"}!

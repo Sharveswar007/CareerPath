@@ -70,25 +70,27 @@ Requirements:
 
 Return ONLY the JSON array, no other text.`;
 
-        const completion = await groq.chat.completions.create({
-            messages: [
-                {
-                    role: "system",
-                    content: "You are a career market analyst. Return only valid JSON arrays.",
-                },
-                {
-                    role: "user",
-                    content: prompt,
-                },
-            ],
-            model: "llama-3.3-70b-versatile",
-            temperature: 0.7,
-            max_tokens: 1000,
-        });
-
-        const content = completion.choices[0]?.message?.content || "[]";
+        let content = "[]";
 
         try {
+            const completion = await groq.chat.completions.create({
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are a career market analyst. Return only valid JSON arrays.",
+                    },
+                    {
+                        role: "user",
+                        content: prompt,
+                    },
+                ],
+                model: "llama-3.3-70b-versatile",
+                temperature: 0.7,
+                max_tokens: 1000,
+            });
+
+            content = completion.choices[0]?.message?.content || "[]";
+
             const cleanContent = content.replace(/```json\n?|\n?```/g, "").trim();
             const careers = JSON.parse(cleanContent);
 

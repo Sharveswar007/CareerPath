@@ -286,7 +286,7 @@ export default function SkillsPage() {
                 >
                     <Card className="p-6 h-full">
                         <div className="flex items-center gap-2 mb-4">
-                            <Award className="h-5 w-5 text-green-500" />
+
                             <h3 className="font-semibold">Your Strengths</h3>
                         </div>
                         <ul className="space-y-2">

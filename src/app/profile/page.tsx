@@ -34,6 +34,7 @@ import {
     Rocket,
     Camera,
     BookOpen,
+    AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -1082,20 +1083,25 @@ export default function ProfilePage() {
                             <Target className="h-5 w-5" />
                             Proctoring Violations
                         </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-3">
                             {violations.map((violation) => (
-                                <Card key={violation.id} className="p-4 border-red-500/30 bg-red-500/5">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <Badge variant="destructive" className="bg-red-500/20 text-red-600 hover:bg-red-500/30">
-                                            {violation.assessment_type === "onboarding" ? "Onboarding" : "Retest"}
-                                        </Badge>
-                                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                            <Calendar className="h-3 w-3" />
-                                            {new Date(violation.created_at).toLocaleString()}
-                                        </span>
+                                <div key={violation.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-red-500/20 bg-red-500/5 gap-3">
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2 bg-red-500/10 rounded-full mt-0.5">
+                                            <AlertTriangle className="w-4 h-4 text-red-500" />
+                                        </div>
+                                        <div>
+                                            <p className="font-medium text-red-500">{violation.violation_reason}</p>
+                                            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                                                <Calendar className="w-3 h-3" />
+                                                {new Date(violation.created_at).toLocaleString()}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <p className="text-sm font-medium">{violation.violation_reason}</p>
-                                </Card>
+                                    <Badge variant="outline" className="text-red-500 border-red-500/30 shrink-0">
+                                        {violation.assessment_type.replace('_', ' ').toUpperCase()}
+                                    </Badge>
+                                </div>
                             ))}
                         </div>
                     </motion.div>

@@ -186,7 +186,7 @@ export default function TestSessionPage() {
 
         for (const tc of visibleTestCases) {
             const result = await executeCode(studentCode, lang, tc.input);
-            const isCorrect = result.success && result.output.trim() === tc.expected.trim();
+            const isCorrect = result.success && String(result.output).trim() === String(tc.expected).trim();
             if (isCorrect) passed++;
             
             results.push({

@@ -13,6 +13,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Users, FileQuestion, Plus, Loader2, Play, User, Key, Calendar, Download, Target, Trophy, Mail, Phone, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TestBuilder, CustomQuestion } from "@/components/teacher/TestBuilder";
 
 export default function TeacherDashboard() {
     const router = useRouter();
@@ -140,18 +141,17 @@ export default function TeacherDashboard() {
         toast.success("CSV Exported successfully!");
     };
 
+    const generateRandomCode = () => {
+        return Math.random().toString(36).substring(2, 8).toUpperCase();
+    };
 
     const handleCreateTest = async () => {
+        if (!teacher) return;
         setIsCreatingTest(true);
         try {
             const supabase = createClient();
-            const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-            
-            let title = "Custom Exam";
-            if (testType === 'ai') {
-                const focus = focusArea || "General Programming";
-                title = `AI Exam: ${focus} (${difficulty})`;
-            }
+            const code = generateRandomCode();
+            let title = `AI Exam: ${focusArea || "General Topic"} (${difficulty})`;
 
             const sb = supabase as any;
             const { data: testData, error: insertError } = await sb.from('tests')
@@ -160,32 +160,78 @@ export default function TeacherDashboard() {
                     title,
                     code,
                     status: 'created',
-                    generation_type: testType
+                    generation_type: 'ai_generated'
                 })
                 .select()
                 .single();
 
             if (insertError) throw insertError;
 
-            if (testType === 'ai') {
-                const res = await fetch('/api/exams/generate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        test_id: testData.id,
-                        focus_area: focusArea || "General Programming",
-                        difficulty: difficulty
-                    })
-                });
-                if (!res.ok) throw new Error("AI Generation failed");
-            }
+            const res = await fetch('/api/exams/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    test_id: testData.id,
+                    focus_area: focusArea || "General Programming",
+                    difficulty: difficulty
+                })
+            });
+            if (!res.ok) throw new Error("AI Generation failed");
 
-            toast.success("Test created successfully!");
+            toast.success("AI Test created successfully!");
             setCreateModalOpen(false);
             fetchTests(supabase, teacher.id);
         } catch (error) {
             console.error(error);
-            toast.error("Failed to create test");
+            toast.error("Failed to create AI test");
+        } finally {
+            setIsCreatingTest(false);
+        }
+    };
+
+    const handleSaveCustomTest = async (title: string, questions: CustomQuestion[]) => {
+        if (!teacher) return;
+        setIsCreatingTest(true);
+        try {
+            const supabase = createClient();
+            const code = generateRandomCode();
+            const sb = supabase as any;
+
+            // Insert test
+            const { data: testData, error: insertError } = await sb.from('tests')
+                .insert({
+                    teacher_id: teacher.id,
+                    title,
+                    code,
+                    status: 'created',
+                    generation_type: 'custom'
+                })
+                .select()
+                .single();
+
+            if (insertError) throw insertError;
+
+            // Insert questions
+            const questionInserts = questions.map(q => {
+                if (q.type === 'mcq') {
+                    return { test_id: testData.id, type: 'mcq', content: { question: q.question, options: q.options }, answer: { correct_answer: q.correct_answer } };
+                } else if (q.type === 'fill_in_blank') {
+                    return { test_id: testData.id, type: 'fill_in_blank', content: { code_snippet: q.code_snippet }, answer: { correct_answer: q.correct_answer } };
+                } else if (q.type === 'coding') {
+                    return { test_id: testData.id, type: 'coding', content: { title: q.title, description: q.description, language: q.language, starter_code: q.starter_code }, test_cases: q.test_cases };
+                }
+                return null;
+            }).filter(Boolean);
+
+            const { error: qError } = await sb.from("test_questions").insert(questionInserts);
+            if (qError) throw qError;
+
+            toast.success("Custom Test created successfully!");
+            setCreateModalOpen(false);
+            fetchTests(supabase, teacher.id);
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to save custom test");
         } finally {
             setIsCreatingTest(false);
         }
@@ -361,14 +407,14 @@ export default function TeacherDashboard() {
                                         <Plus className="w-4 h-4 mr-2" /> Create New Exam
                                     </Button>
                                 </DialogTrigger>
-                                <DialogContent className="sm:max-w-[500px] border-border/50 bg-card/80 backdrop-blur-2xl shadow-2xl">
+                                <DialogContent className="sm:max-w-[1000px] border-border/50 bg-card/90 backdrop-blur-2xl shadow-2xl max-h-[90vh] flex flex-col">
                                     <DialogHeader>
                                         <DialogTitle>Create New Exam Session</DialogTitle>
                                         <DialogDescription>
                                             Generate an AI-powered assessment or create custom questions.
                                         </DialogDescription>
                                     </DialogHeader>
-                                    <div className="grid gap-6 py-4">
+                                    <div className="grid gap-6 py-4 flex-1 overflow-y-auto pr-2">
                                         <div className="space-y-3">
                                             <Label>Exam Type</Label>
                                             <RadioGroup defaultValue={testType} onValueChange={setTestType} className="flex gap-4">
@@ -383,13 +429,13 @@ export default function TeacherDashboard() {
                                             </RadioGroup>
                                         </div>
 
-                                        {testType === 'ai' && (
+                                        {testType === 'ai' ? (
                                             <>
                                                 <div className="space-y-2">
-                                                    <Label htmlFor="focus">Focus Area</Label>
+                                                    <Label htmlFor="focus">Exam Title / Topic</Label>
                                                     <Input 
                                                         id="focus" 
-                                                        placeholder="e.g. React, Data Structures, Python Basics" 
+                                                        placeholder="e.g. Python Basics, React Fundamentals" 
                                                         value={focusArea}
                                                         onChange={(e) => setFocusArea(e.target.value)}
                                                     />
@@ -409,18 +455,22 @@ export default function TeacherDashboard() {
                                                 </div>
                                                 <div className="bg-violet-500/10 text-violet-500 p-3 rounded-lg text-sm flex items-start gap-2">
                                                     <Sparkles className="w-4 h-4 mt-0.5 shrink-0" />
-                                                    <p>AI will generate 10 MCQs, 2 Fill-in-the-blanks, and 2 Coding sandbox questions based on this focus area.</p>
+                                                    <p>AI will generate 10 MCQs, 2 Fill-in-the-blanks, and 2 Coding sandbox questions based on this topic.</p>
+                                                </div>
+                                                <div className="mt-4 flex justify-end">
+                                                    <Button variant="outline" className="mr-2" onClick={() => setCreateModalOpen(false)}>Cancel</Button>
+                                                    <Button onClick={handleCreateTest} disabled={isCreatingTest} className="bg-violet-600 hover:bg-violet-700">
+                                                        {isCreatingTest && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                                                        Generate AI Test
+                                                    </Button>
                                                 </div>
                                             </>
+                                        ) : (
+                                            <div className="border-t border-border/50 pt-4 mt-2">
+                                                <TestBuilder onSave={handleSaveCustomTest} />
+                                            </div>
                                         )}
                                     </div>
-                                    <DialogFooter>
-                                        <Button variant="outline" onClick={() => setCreateModalOpen(false)}>Cancel</Button>
-                                        <Button onClick={handleCreateTest} disabled={isCreatingTest} className="bg-violet-600 hover:bg-violet-700">
-                                            {isCreatingTest && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                                            Generate Test
-                                        </Button>
-                                    </DialogFooter>
                                 </DialogContent>
                             </Dialog>
                         </div>

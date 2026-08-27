@@ -151,7 +151,7 @@ export default function TeacherDashboard() {
         try {
             const supabase = createClient();
             const code = generateRandomCode();
-            let title = `AI Exam: ${focusArea || "General Topic"} (${difficulty})`;
+            let title = `Skill Categorization Assessment (${difficulty})`;
 
             const sb = supabase as any;
             const { data: testData, error: insertError } = await sb.from('tests')
@@ -172,7 +172,6 @@ export default function TeacherDashboard() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     test_id: testData.id,
-                    focus_area: focusArea || "General Programming",
                     difficulty: difficulty
                 })
             });
@@ -432,36 +431,40 @@ export default function TeacherDashboard() {
                                         {testType === 'ai' ? (
                                             <>
                                                 <div className="space-y-2">
-                                                    <Label htmlFor="focus">Exam Title / Topic</Label>
-                                                    <Input 
-                                                        id="focus" 
-                                                        placeholder="e.g. Python Basics, React Fundamentals" 
-                                                        value={focusArea}
-                                                        onChange={(e) => setFocusArea(e.target.value)}
-                                                    />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="diff">Difficulty</Label>
+                                                    <Label htmlFor="diff">Target Difficulty</Label>
                                                     <Select value={difficulty} onValueChange={setDifficulty}>
                                                         <SelectTrigger id="diff">
                                                             <SelectValue placeholder="Select difficulty" />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            <SelectItem value="Easy">Easy</SelectItem>
-                                                            <SelectItem value="Medium">Medium</SelectItem>
-                                                            <SelectItem value="Hard">Hard</SelectItem>
+                                                            <SelectItem value="Easy">Beginner (Easy)</SelectItem>
+                                                            <SelectItem value="Medium">Intermediate (Medium)</SelectItem>
+                                                            <SelectItem value="Hard">Advanced (Hard)</SelectItem>
                                                         </SelectContent>
                                                     </Select>
                                                 </div>
-                                                <div className="bg-violet-500/10 text-violet-500 p-3 rounded-lg text-sm flex items-start gap-2">
-                                                    <Sparkles className="w-4 h-4 mt-0.5 shrink-0" />
-                                                    <p>AI will generate 10 MCQs, 2 Fill-in-the-blanks, and 2 Coding sandbox questions based on this topic.</p>
+                                                <div className="bg-violet-500/10 border border-violet-500/20 text-violet-500 p-4 rounded-xl text-sm flex flex-col gap-2">
+                                                    <div className="flex items-center gap-2 font-semibold">
+                                                        <Sparkles className="w-4 h-4 shrink-0" />
+                                                        Skill Categorization Assessment
+                                                    </div>
+                                                    <p className="text-muted-foreground">
+                                                        This AI-generated exam is specifically designed to evaluate students and categorize them into:
+                                                    </p>
+                                                    <ul className="list-disc pl-5 space-y-1 mt-1 text-muted-foreground">
+                                                        <li><strong className="text-violet-400">No Code:</strong> Basic understanding, unable to write syntax.</li>
+                                                        <li><strong className="text-violet-400">Low Code:</strong> Can write basic code but struggles with complex logic.</li>
+                                                        <li><strong className="text-violet-400">High Code:</strong> Advanced problem solver, writes optimal code.</li>
+                                                    </ul>
+                                                    <p className="mt-2 text-xs italic">
+                                                        Includes 10 MCQs, 2 Fill-in-the-blanks, and 2 Coding Sandbox challenges.
+                                                    </p>
                                                 </div>
                                                 <div className="mt-4 flex justify-end">
                                                     <Button variant="outline" className="mr-2" onClick={() => setCreateModalOpen(false)}>Cancel</Button>
                                                     <Button onClick={handleCreateTest} disabled={isCreatingTest} className="bg-violet-600 hover:bg-violet-700">
                                                         {isCreatingTest && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                                                        Generate AI Test
+                                                        Generate Categorization Exam
                                                     </Button>
                                                 </div>
                                             </>

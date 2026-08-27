@@ -10,14 +10,13 @@ const groq = new Groq({
 
 export async function POST(request: NextRequest) {
     try {
-        const { focus_area, difficulty, test_id } = await request.json();
+        const { difficulty, test_id } = await request.json();
 
         if (!test_id) {
             return NextResponse.json({ error: "test_id required" }, { status: 400 });
         }
 
-        const prompt = `Generate a comprehensive technical test to evaluate a student's coding ability and categorize them as "No Code", "Low Code", or "High Code".
-Focus Area: ${focus_area || "General Programming"}
+        const prompt = `Generate a comprehensive technical test to evaluate a student's general programming ability (Data Structures, Algorithms, Core Logic) and categorize them as "No Code", "Low Code", or "High Code".
 Difficulty Level: ${difficulty || "Medium"}
 
 The test must strictly contain:

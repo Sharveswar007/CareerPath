@@ -61,7 +61,7 @@ export async function streamChatCompletion(
 
     try {
         const stream = await groq.chat.completions.create({
-            model: "llama-3.1-8b-instant",
+            model: "llama3-8b-8192",
             messages: allMessages,
             stream: true,
             max_tokens: 4096,
@@ -100,7 +100,7 @@ export async function generateChatCompletion(
     ];
 
     const completion = await groq.chat.completions.create({
-        model: "llama-3.1-8b-instant",
+        model: "llama3-8b-8192",
         messages: allMessages,
         max_tokens: 4096,
         temperature: 0.7,
@@ -146,7 +146,7 @@ Include at least 3 examples, 10 test cases (with 5 hidden), and 3 hints.
 Make the problem statement clear and unambiguous.`;
 
     const completion = await groq.chat.completions.create({
-        model: "llama-3.1-8b-instant",
+        model: "llama3-8b-8192",
         messages: [
             {
                 role: "system",
@@ -201,7 +201,7 @@ Provide a comprehensive analysis in JSON format:
 Evaluate: Contact info, Education, Experience, Skills, Projects, Formatting, ATS compatibility.`;
 
     const completion = await groq.chat.completions.create({
-        model: "llama-3.1-8b-instant",
+        model: "llama3-8b-8192",
         messages: [
             {
                 role: "system",

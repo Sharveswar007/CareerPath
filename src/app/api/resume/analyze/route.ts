@@ -227,7 +227,7 @@ Return JSON only:
                     content: validationPrompt,
                 },
             ],
-            model: "llama-3.1-8b-instant",
+            model: "llama3-8b-8192",
             temperature: 0.1,
             max_tokens: 300,
             response_format: { type: "json_object" },
@@ -296,7 +296,7 @@ Return JSON only:
                     content: prompt,
                 },
             ],
-            model: "llama-3.1-8b-instant",
+            model: "llama3-8b-8192",
             temperature: 0.1,
             response_format: { type: "json_object" },
         });

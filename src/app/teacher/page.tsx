@@ -68,7 +68,7 @@ export default function TeacherDashboard() {
         const sb = supabase as any;
         const { data } = await sb.from('tests')
             .select('*')
-            .eq('teacher_id', teacherId)
+            .eq('creator_id', teacherId)
             .order('created_at', { ascending: false });
         if (data) setTests(data);
     };
@@ -156,11 +156,11 @@ export default function TeacherDashboard() {
             const sb = supabase as any;
             const { data: testData, error: insertError } = await sb.from('tests')
                 .insert({
-                    teacher_id: teacher.id,
-                    title,
+                    creator_id: teacher.id,
                     code,
                     status: 'created',
-                    generation_type: 'ai_generated'
+                    generation_type: 'ai_generated',
+                    configuration: { title }
                 })
                 .select()
                 .single();
@@ -199,11 +199,11 @@ export default function TeacherDashboard() {
             // Insert test
             const { data: testData, error: insertError } = await sb.from('tests')
                 .insert({
-                    teacher_id: teacher.id,
-                    title,
+                    creator_id: teacher.id,
                     code,
                     status: 'created',
-                    generation_type: 'custom'
+                    generation_type: 'custom',
+                    configuration: { title }
                 })
                 .select()
                 .single();
@@ -489,7 +489,9 @@ export default function TeacherDashboard() {
                                 {tests.map(test => (
                                     <Card key={test.id} className="p-6 border-border/50 bg-card/50 backdrop-blur-sm hover:border-violet-500/30 transition-all flex flex-col">
                                         <div className="flex justify-between items-start mb-4">
-                                            <h3 className="font-semibold text-lg line-clamp-1">{test.title}</h3>
+                                            <h3 className="font-semibold text-lg line-clamp-1">
+                                                {test.configuration?.title || (test.generation_type === 'ai_generated' ? 'AI Assessment' : 'Custom Assessment')}
+                                            </h3>
                                             <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                                                 test.status === 'created' ? 'bg-violet-500/10 text-violet-500' :
                                                 test.status === 'started' ? 'bg-emerald-500/10 text-emerald-500' :

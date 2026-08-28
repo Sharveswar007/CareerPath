@@ -136,7 +136,7 @@ function areOutputsEquivalent(actualOutput: string, expectedOutput: string): boo
 export default function ChallengeDetailPage() {
     const params = useParams();
     const router = useRouter();
-    const [language, setLanguage] = useState("javascript");
+    const [language, setLanguage] = useState("python");
     const [code, setCode] = useState("");
     const [isRunning, setIsRunning] = useState(false);
     const [activeTab, setActiveTab] = useState("description");
@@ -146,9 +146,9 @@ export default function ChallengeDetailPage() {
 
     // Supported languages for the platform
     const supportedLanguages = [
-        { id: "javascript", label: "JavaScript", icon: "JS" },
         { id: "python", label: "Python", icon: "PY" },
         { id: "java", label: "Java", icon: "JV" },
+        { id: "c", label: "C", icon: "C" },
         { id: "cpp", label: "C++", icon: "C++" },
     ];
 
@@ -168,8 +168,8 @@ export default function ChallengeDetailPage() {
         if (/#include\s*</.test(code) || /std::/.test(code) || /cout\s*<</.test(code)) {
             return "cpp";
         }
-        // Default to JavaScript
-        return "javascript";
+        // Default to Python
+        return "python";
     };
 
     // Fetch challenge from DB

@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
         // 2. Fetch all submissions for this session
         const { data: submissions, error: subError } = await sb.from("test_submissions").select(`
                 id, score, is_correct, student_answer, code_submission, ai_evaluation,
-                test_questions ( type, content, test_cases )
+                test_questions ( type, content, test_cases, answer )
             `).eq("session_id", session_id);
 
         if (subError || !submissions) {
@@ -44,10 +44,32 @@ export async function POST(request: NextRequest) {
         const fibs = submissions.filter((s: any) => s.test_questions.type === 'fill_in_blank');
         const coding = submissions.filter((s: any) => s.test_questions.type === 'coding');
 
+        // Re-evaluate MCQs and FIBs securely on the backend
+        for (const sub of mcqs.concat(fibs)) {
+            const correctAnswer = sub.test_questions.answer?.correct_answer;
+            const studentAns = sub.student_answer;
+            let isCorrect = false;
+            
+            if (correctAnswer !== undefined && studentAns !== undefined) {
+                if (sub.test_questions.type === 'mcq') {
+                    isCorrect = String(studentAns).trim() === String(correctAnswer).trim();
+                } else if (sub.test_questions.type === 'fill_in_blank') {
+                    isCorrect = String(studentAns).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
+                }
+            }
+            
+            sub.is_correct = isCorrect;
+            sub.score = isCorrect ? 1 : 0;
+            await sb.from("test_submissions").update({ is_correct: isCorrect, score: sub.score }).eq("id", sub.id);
+        }
+
         // Execute coding questions securely against test cases
         for (const sub of coding) {
             const codeSub = sub.code_submission as any;
-            if (!codeSub || !codeSub.code) continue;
+            if (!codeSub || !codeSub.code) {
+                sub.score = 0;
+                continue;
+            }
             
             const studentCode = codeSub.code;
             const lang = normalizeLanguage(codeSub.language || 'javascript');
@@ -67,7 +89,7 @@ export async function POST(request: NextRequest) {
             }
             
             sub.score = passed; 
-            await sb.from("test_submissions").update({ score: passed }).eq("id", sub.id);
+            // We don't update DB here yet because AI might adjust the score
         }
 
         const totalMcqs = mcqs.length;
@@ -76,20 +98,8 @@ export async function POST(request: NextRequest) {
         const totalFibs = fibs.length;
         const fibScore = fibs.filter((s: any) => s.is_correct).length;
         
-        let totalCodingTestCases = 0;
-        let codingPassed = 0;
-        
-        for (const sub of coding) {
-             const tcs = sub.test_questions.test_cases || [];
-             totalCodingTestCases += tcs.length;
-             codingPassed += (sub.score || 0);
-        }
-        
-        const maxScore = totalMcqs + totalFibs + totalCodingTestCases;
-        const totalScoreObtained = mcqScore + fibScore + codingPassed;
-        const calculatedPercentage = maxScore > 0 ? Math.round((totalScoreObtained / maxScore) * 100) : 0;
-
         const codingSummary = coding.map((s: any) => ({
+            id: s.id,
             title: s.test_questions.content.title,
             student_code: s.code_submission?.code || "",
             test_cases_passed: s.score || 0,
@@ -98,24 +108,29 @@ export async function POST(request: NextRequest) {
 
         const prompt = `You are an expert technical interviewer evaluating a student's test submission.
         
-Based on the following data, categorize the student into exactly one of these categories: "no_code", "low_code", or "high_code".
-
 Data:
 - MCQs: ${mcqScore} out of ${totalMcqs} correct.
-- Fill in Blanks: ${fibs.filter((s: any) => s.is_correct).length} out of ${fibs.length} correct.
+- Fill in Blanks: ${fibScore} out of ${totalFibs} correct.
 - Coding Submissions: 
 ${JSON.stringify(codingSummary, null, 2)}
 
-Categorization Guidelines:
-- "no_code": Failed most MCQs. Could not write basic syntax for the coding questions or passed 0 test cases.
-- "low_code": Passed many MCQs. Wrote some code and passed some basic/visible test cases, but failed hidden/complex edge cases. Code might be inefficient.
-- "high_code": Passed almost all MCQs. Solved coding questions efficiently and passed almost all hidden test cases.
+Tasks:
+1. Categorize the student into EXACTLY ONE of these categories: "no_code", "low_code", or "high_code".
+   - "no_code": Failed most MCQs, no basic syntax for coding.
+   - "low_code": Passed many MCQs, wrote some code, passed basic cases but failed complex ones.
+   - "high_code": Passed almost all MCQs, solved coding questions efficiently.
+2. For EACH coding submission, evaluate the student's code and assign a partial correctness percentage (0 to 100).
+   - If they passed all test cases, assign 100.
+   - If they failed test cases, analyze their logic, syntax, and approach to determine a fair partial score %.
 
 Return strict JSON:
 {
     "coding_category": "no_code | low_code | high_code",
+    "coding_partial_scores": {
+        "submission_id_here": 85
+    },
     "detailed_report": {
-        "summary": "Brief summary of their performance...",
+        "summary": "Brief summary...",
         "strengths": ["...", "..."],
         "weaknesses": ["...", "..."]
     }
@@ -137,6 +152,37 @@ Return strict JSON:
         }
         
         const evaluation = JSON.parse(content);
+        
+        // Apply AI partial scores to coding questions
+        let totalCodingTestCases = 0;
+        let codingPassed = 0;
+        
+        for (const sub of coding) {
+             const tcs = sub.test_questions.test_cases || [];
+             totalCodingTestCases += tcs.length;
+             
+             let aiPercentage = evaluation.coding_partial_scores?.[sub.id];
+             
+             // If AI didn't provide a score or it passed all cases natively, use native score
+             if (aiPercentage === undefined || sub.score === tcs.length) {
+                 codingPassed += (sub.score || 0);
+             } else {
+                 // Use AI partial percentage to calculate equivalent test cases passed
+                 const adjustedScore = Math.round((aiPercentage / 100) * tcs.length);
+                 sub.score = adjustedScore;
+                 codingPassed += adjustedScore;
+             }
+             
+             await sb.from("test_submissions").update({ 
+                 score: sub.score, 
+                 ai_evaluation: { partial_percentage: aiPercentage, original_passed: sub.score }
+             }).eq("id", sub.id);
+        }
+        
+        const maxScore = totalMcqs + totalFibs + totalCodingTestCases;
+        const totalScoreObtained = mcqScore + fibScore + codingPassed;
+        const calculatedPercentage = maxScore > 0 ? Math.round((totalScoreObtained / maxScore) * 100) : 0;
+
         evaluation.total_score_out_of_100 = calculatedPercentage;
 
         // 4. Save Results

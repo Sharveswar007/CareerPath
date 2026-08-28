@@ -53,8 +53,13 @@ export function Header() {
         setTheme(theme === "dark" ? "light" : "dark");
     };
 
-    // Hide header on login, onboarding, and teacher pages
-    if (pathname?.startsWith("/login") || pathname?.startsWith("/onboarding") || pathname?.startsWith("/teacher")) {
+    // Hide header on login, onboarding, teacher pages, and active test sessions
+    if (
+        pathname?.startsWith("/login") || 
+        pathname?.startsWith("/onboarding") || 
+        pathname?.startsWith("/teacher") ||
+        pathname?.match(/^\/test\/.*\/session/)
+    ) {
         return null;
     }
 

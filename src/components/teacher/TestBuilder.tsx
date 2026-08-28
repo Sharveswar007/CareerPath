@@ -155,7 +155,9 @@ export function TestBuilder({ onSave }: TestBuilderProps) {
                                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="python">Python</SelectItem>
-                                                    <SelectItem value="javascript">JavaScript</SelectItem>
+                                                    <SelectItem value="java">Java</SelectItem>
+                                                    <SelectItem value="c">C</SelectItem>
+                                                    <SelectItem value="cpp">C++</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>

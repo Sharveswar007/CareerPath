@@ -136,7 +136,7 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
             if (e.key === "F12" || (e.ctrlKey && e.shiftKey && e.key === "I")) {
                 e.preventDefault();
             }
-            if (e.ctrlKey && (e.key === "c" || e.key === "v" || e.key === "x" || e.key === "C" || e.key === "V" || e.key === "X")) {
+            if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "c" || e.key === "v" || e.key === "x" || e.key === "C" || e.key === "V" || e.key === "X")) {
                 e.preventDefault();
             }
             if (e.altKey && e.key === "Tab") {

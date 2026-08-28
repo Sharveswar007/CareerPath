@@ -75,7 +75,7 @@ export default function TeacherDashboard() {
                 const sb = supabase as any;
                 
                 const { data: sessions } = await sb.from('test_sessions')
-                    .select('id, student_id, status')
+                    .select('id, student_id, status, completed_at')
                     .eq('test_id', activeTest.id);
                 
                 if (sessions && sessions.length > 0) {
@@ -485,7 +485,24 @@ export default function TeacherDashboard() {
                                         {students.map(student => {
                                             const stats = getStudentStats(student.id);
                                             return (
-                                                <tr key={student.id} className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => setSelectedStudent(student)}>
+                                                <tr key={student.id} className="bg-card/50 hover:bg-card transition-colors cursor-pointer" onClick={async () => {
+                                            setSelectedStudent(student);
+                                            
+                                            // Fetch latest test results for this specific student to ensure history is up-to-date
+                                            const { createClient } = await import("@/lib/supabase/client");
+                                            const supabase = createClient();
+                                            const { data: latestResults } = await supabase.from('test_results')
+                                                .select('*, tests(configuration, generation_type)')
+                                                .eq('student_id', student.id);
+                                                
+                                            if (latestResults) {
+                                                setTestResults(prev => {
+                                                    // Remove old results for this student and append fresh ones
+                                                    const filtered = prev.filter(tr => tr.student_id !== student.id);
+                                                    return [...filtered, ...latestResults];
+                                                });
+                                            }
+                                        }}>
                                                     <td className="px-6 py-4 font-medium flex items-center gap-3">
                                                         <div className="w-8 h-8 rounded-full bg-violet-500/20 text-violet-500 flex items-center justify-center font-bold text-xs uppercase">
                                                             {(student.full_name || 'U').substring(0,2)}
@@ -691,14 +708,14 @@ export default function TeacherDashboard() {
                                                                 'bg-gray-500/10 text-gray-500'
                                                             }`}>
                                                                 {(session.status === 'completed' && !session.completed_at) && <ShieldAlert className="w-3 h-3" />}
-                                                                {(session.status === 'completed' && !session.completed_at) ? 'BANNED' : session.status.toUpperCase()}
+                                                                {(session.status === 'completed' && !session.completed_at) ? 'COMPLETED (MALPRACTICE)' : session.status.toUpperCase()}
                                                             </span>
                                                             {(session.status === 'completed' && !session.completed_at) && (
                                                                 <Button variant="outline" size="sm" className="h-7 text-xs border-emerald-500 text-emerald-500 hover:bg-emerald-500 hover:text-white" onClick={() => handleUnban(session.id)}>
                                                                     Unban
                                                                 </Button>
                                                             )}
-                                                            {(session.status === 'completed' && session.completed_at) && (
+                                                            {session.status === 'completed' && (
                                                                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setSelectedSession(session)}>
                                                                     <Eye className="w-4 h-4 text-violet-500" />
                                                                 </Button>
@@ -873,7 +890,12 @@ export default function TeacherDashboard() {
                                                 </div>
 
                                                 {isCode && q.test_cases?.length > 0 && (
-                                                    <p className="text-xs text-muted-foreground">Passed {sub.score} out of {q.test_cases.length} test cases.</p>
+                                                    <div className="flex flex-col gap-1">
+                                                        <p className="text-xs text-muted-foreground">Passed {sub.ai_evaluation?.original_passed !== undefined ? sub.ai_evaluation.original_passed : sub.score} out of {q.test_cases.length} strict test cases.</p>
+                                                        {sub.ai_evaluation?.partial_percentage !== undefined && (
+                                                            <p className="text-xs text-violet-500 font-medium">✨ AI Partial Score: {sub.ai_evaluation.partial_percentage}% for logical correctness</p>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </div>
                                         );

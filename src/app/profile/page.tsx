@@ -26,6 +26,8 @@ import {
     Zap,
     Star,
     ChevronRight,
+    ChevronDown,
+    ChevronUp,
     Calendar,
     Trophy,
     Flame,
@@ -171,6 +173,7 @@ export default function ProfilePage() {
     const [totalAssessments, setTotalAssessments] = useState(0);
     const [uploadingAvatar, setUploadingAvatar] = useState(false);
     const [violations, setViolations] = useState<ProctoringViolation[]>([]);
+    const [showViolations, setShowViolations] = useState(false);
     const [testSessions, setTestSessions] = useState<any[]>([]);
 
     const [editForm, setEditForm] = useState({
@@ -1079,31 +1082,49 @@ export default function ProfilePage() {
                 {/* Malpractice History */}
                 {violations.length > 0 && (
                     <motion.div variants={itemVariants} className="mb-8">
-                        <h2 className="font-semibold mb-4 flex items-center gap-2 text-red-500">
-                            <Target className="h-5 w-5" />
-                            Proctoring Violations
-                        </h2>
-                        <div className="space-y-3">
-                            {violations.map((violation) => (
-                                <div key={violation.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-red-500/20 bg-red-500/5 gap-3">
-                                    <div className="flex items-start gap-3">
-                                        <div className="p-2 bg-red-500/10 rounded-full mt-0.5">
-                                            <AlertTriangle className="w-4 h-4 text-red-500" />
-                                        </div>
-                                        <div>
-                                            <p className="font-medium text-red-500">{violation.violation_reason}</p>
-                                            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                                                <Calendar className="w-3 h-3" />
-                                                {new Date(violation.created_at).toLocaleString()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Badge variant="outline" className="text-red-500 border-red-500/30 shrink-0">
-                                        {violation.assessment_type.replace('_', ' ').toUpperCase()}
-                                    </Badge>
-                                </div>
-                            ))}
+                        <div 
+                            className="flex items-center justify-between cursor-pointer mb-4 hover:opacity-80 transition-opacity"
+                            onClick={() => setShowViolations(!showViolations)}
+                        >
+                            <h2 className="font-semibold flex items-center gap-2 text-red-500">
+                                <Target className="h-5 w-5" />
+                                Proctoring Violations ({violations.length})
+                            </h2>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500 hover:bg-red-500/10 hover:text-red-600">
+                                {showViolations ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                            </Button>
                         </div>
+                        
+                        <AnimatePresence>
+                            {showViolations && (
+                                <motion.div 
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: "auto", opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    className="space-y-3 overflow-hidden"
+                                >
+                                    {violations.map((violation) => (
+                                        <div key={violation.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-red-500/20 bg-red-500/5 gap-3">
+                                            <div className="flex items-start gap-3">
+                                                <div className="p-2 bg-red-500/10 rounded-full mt-0.5">
+                                                    <AlertTriangle className="w-4 h-4 text-red-500" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium text-red-500">{violation.violation_reason}</p>
+                                                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                                                        <Calendar className="w-3 h-3" />
+                                                        {new Date(violation.created_at).toLocaleString()}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <Badge variant="outline" className="text-red-500 border-red-500/30 shrink-0">
+                                                {violation.assessment_type.replace('_', ' ').toUpperCase()}
+                                            </Badge>
+                                        </div>
+                                    ))}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </motion.div>
                 )}
 

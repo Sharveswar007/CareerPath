@@ -23,7 +23,7 @@ The test must strictly contain:
 1. 10 Multiple Choice Questions (MCQs) focusing on fundamental concepts.
 2. 2 "Fill in the blank" code snippets.
 3. 2 Coding Sandbox Questions (Q1: Easy algorithm, Q2: Medium/Hard algorithm).
-   - For EACH coding question, provide exactly 3 'visible' test cases and exactly 7 'hidden' test cases.
+   - For EACH coding question, provide exactly 3 'visible' test cases and exactly 10 'hidden' test cases (13 total test cases per question).
    - The 'starter_code' MUST ONLY contain the empty function signature. DO NOT include the actual solution or implementation logic. Use comments like '// YOUR CODE HERE'.
 
 Return strict JSON structure:
@@ -46,9 +46,9 @@ Return strict JSON structure:
             "title": "Problem Title",
             "description": "Markdown description...",
             "starter_code": {
-                "javascript": "function solve(args) {\n    // YOUR CODE HERE\n}",
                 "python": "def solve(args):\n    # YOUR CODE HERE\n    pass",
                 "java": "class Solution {\n    public static void solve() {\n        // YOUR CODE HERE\n    }\n}",
+                "c": "#include <stdio.h>\n\nvoid solve() {\n    // YOUR CODE HERE\n}",
                 "cpp": "#include <iostream>\n\nvoid solve() {\n    // YOUR CODE HERE\n}"
             },
             "test_cases": [

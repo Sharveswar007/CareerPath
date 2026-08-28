@@ -29,8 +29,10 @@ export async function POST(request: NextRequest) {
             "difficulty": "${difficulty || "medium"}",
                 "category": "Topic (e.g. Arrays, API, Database)",
                     "starter_code": {
-        "javascript": "// Write your solution here\\nfunction solve() {\\n\\n}",
-            "python": "# Write your solution here\\ndef solve():\\n    pass"
+        "python": "# Write your solution here\\ndef solve():\\n    pass",
+        "java": "class Solution {\\n    public static void solve() {\\n\\n    }\\n}",
+        "c": "#include <stdio.h>\\n\\nvoid solve() {\\n\\n}",
+        "cpp": "#include <iostream>\\n\\nvoid solve() {\\n\\n}"
     },
     "test_cases": [
         { "input": "...", "expected": "..." }

@@ -140,10 +140,10 @@ export default function TestSessionPage() {
             
             setSessionId(sessionData.id);
 
-            // Fetch questions
+            // Fetch questions (without answers for security)
             const { data: qData, error: qError } = await supabase
                 .from("test_questions")
-                .select("*")
+                .select("id, test_id, type, content, test_cases")
                 .eq("test_id", testInfo.id)
                 .order('id', { ascending: true });
 
@@ -153,7 +153,7 @@ export default function TestSessionPage() {
                 const initialLanguages: Record<string, string> = {};
                 qData.forEach(q => {
                     if (q.type === 'coding') {
-                        initialLanguages[q.id] = 'javascript';
+                        initialLanguages[q.id] = 'python';
                     }
                 });
                 setSelectedLanguages(initialLanguages);
@@ -189,7 +189,7 @@ export default function TestSessionPage() {
     };
 
     const handleRunCode = async (question: any) => {
-        const lang = selectedLanguages[question.id] || 'javascript';
+        const lang = selectedLanguages[question.id] || 'python';
         const studentCode = answers[question.id] || question.content.starter_code?.[lang] || "";
         const visibleTestCases = question.test_cases?.filter((tc: any) => !tc.is_hidden) || [];
         
@@ -466,7 +466,7 @@ export default function TestSessionPage() {
                                     <div className="border rounded-xl overflow-hidden ring-1 ring-border focus-within:ring-violet-500 transition-all">
                                         <Editor
                                             height="150px"
-                                            language="javascript"
+                                            language="c"
                                             theme="vs-dark"
                                             value={answers[currentQuestion.id] || ''}
                                             onChange={(val) => handleAnswerChange(currentQuestion.id, val)}
@@ -503,13 +503,13 @@ export default function TestSessionPage() {
                                         Code Editor
                                     </label>
                                     <select 
-                                        value={selectedLanguages[currentQuestion.id] || 'javascript'}
+                                        value={selectedLanguages[currentQuestion.id] || 'python'}
                                         onChange={(e) => handleLanguageChange(currentQuestion.id, e.target.value)}
                                         className="bg-background border border-border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-violet-500"
                                     >
-                                        <option value="javascript">JavaScript (Node.js)</option>
                                         <option value="python">Python</option>
                                         <option value="java">Java</option>
+                                        <option value="c">C</option>
                                         <option value="cpp">C++</option>
                                     </select>
                                 </div>
@@ -517,9 +517,9 @@ export default function TestSessionPage() {
                                 <div className="flex-1 border rounded-xl overflow-hidden relative shadow-lg">
                                     <Editor
                                         height="400px"
-                                        language={selectedLanguages[currentQuestion.id] || 'javascript'}
+                                        language={selectedLanguages[currentQuestion.id] || 'python'}
                                         theme="vs-dark"
-                                        value={answers[currentQuestion.id] ?? currentQuestion.content.starter_code?.[selectedLanguages[currentQuestion.id] || 'javascript'] ?? ''}
+                                        value={answers[currentQuestion.id] ?? currentQuestion.content.starter_code?.[selectedLanguages[currentQuestion.id] || 'python'] ?? ''}
                                         onChange={(val) => handleAnswerChange(currentQuestion.id, val)}
                                         options={{
                                             minimap: { enabled: false },

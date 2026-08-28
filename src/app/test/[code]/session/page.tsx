@@ -178,21 +178,11 @@ export default function TestSessionPage() {
         }
     }, [currentQuestionIndex, questions]);
 
-    const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
     const handleAnswerChange = (questionId: string, value: any) => {
-        // Clear existing timeout
-        if (updateTimeoutRef.current) {
-            clearTimeout(updateTimeoutRef.current);
-        }
-        
-        // Debounce state update to prevent re-rendering the editor on every keystroke
-        updateTimeoutRef.current = setTimeout(() => {
-            setAnswers(prev => ({
-                ...prev,
-                [questionId]: value
-            }));
-        }, 300);
+        setAnswers(prev => ({
+            ...prev,
+            [questionId]: value
+        }));
     };
 
     const handleLanguageChange = (questionId: string, language: string) => {

@@ -112,19 +112,15 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
             }
         };
 
-        const handleBlur = () => {
-            if (enabledRef.current) {
-                triggerViolation("Window lost focus (opened another app)");
-            }
-        };
+        // NOTE: We intentionally do NOT add a window "blur" listener.
+        // Monaco Editor uses internal <textarea>/<iframe> elements for keyboard input.
+        // When a student clicks into the code editor, the browser fires a "blur" event 
+        // on the window as focus moves to Monaco's internal element. This was causing
+        // false proctoring violations and interfering with keystroke delivery (especially
+        // keys like 'a', 's', 'd' which are typed in rapid bursts). The "visibilitychange"
+        // event above already reliably detects actual tab switches and app switching.
 
         const handleContextMenu = (e: MouseEvent) => {
-            if (enabledRef.current) {
-                e.preventDefault();
-            }
-        };
-
-        const handleClipboard = (e: ClipboardEvent) => {
             if (enabledRef.current) {
                 e.preventDefault();
             }
@@ -133,38 +129,39 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
         const handleKeyDown = (e: KeyboardEvent) => {
             if (!enabledRef.current) return;
 
-            if (e.key === "F12" || (e.ctrlKey && e.shiftKey && e.key === "I")) {
+            // Only block specific dangerous key combinations — never block plain letter keys
+            const key = e.key;
+
+            if (key === "F12" || (e.ctrlKey && e.shiftKey && key === "I")) {
                 e.preventDefault();
+                return;
             }
-            if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "c" || e.key === "v" || e.key === "x" || e.key === "C" || e.key === "V" || e.key === "X")) {
+            if ((e.ctrlKey || e.metaKey) && !e.altKey && (key === "c" || key === "v" || key === "x" || key === "C" || key === "V" || key === "X")) {
                 e.preventDefault();
+                return;
             }
-            if (e.altKey && e.key === "Tab") {
+            if (e.altKey && key === "Tab") {
                 e.preventDefault();
+                return;
             }
-            if (e.key === "PrintScreen") {
+            if (key === "PrintScreen") {
                 e.preventDefault();
+                return;
             }
         };
 
         document.addEventListener("fullscreenchange", handleFullscreenChange);
         document.addEventListener("visibilitychange", handleVisibilityChange);
-        window.addEventListener("blur", handleBlur);
         document.addEventListener("contextmenu", handleContextMenu);
-        document.addEventListener("copy", handleClipboard);
-        document.addEventListener("cut", handleClipboard);
-        document.addEventListener("paste", handleClipboard);
-        document.addEventListener("keydown", handleKeyDown);
+        // Use capture phase for keydown so we intercept BEFORE Monaco processes the event
+        // But only preventDefault on the specific dangerous keys listed above
+        document.addEventListener("keydown", handleKeyDown, true);
 
         return () => {
             document.removeEventListener("fullscreenchange", handleFullscreenChange);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
-            window.removeEventListener("blur", handleBlur);
             document.removeEventListener("contextmenu", handleContextMenu);
-            document.removeEventListener("copy", handleClipboard);
-            document.removeEventListener("cut", handleClipboard);
-            document.removeEventListener("paste", handleClipboard);
-            document.removeEventListener("keydown", handleKeyDown);
+            document.removeEventListener("keydown", handleKeyDown, true);
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled]); // Only re-run when enabled changes

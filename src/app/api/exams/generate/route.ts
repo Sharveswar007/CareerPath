@@ -46,10 +46,10 @@ Return strict JSON structure:
             "title": "Problem Title",
             "description": "Markdown description...",
             "starter_code": {
-                "python": "def solve(args):\n    # YOUR CODE HERE\n    pass",
-                "java": "class Solution {\n    public static void solve() {\n        // YOUR CODE HERE\n    }\n}",
-                "c": "#include <stdio.h>\n\nvoid solve() {\n    // YOUR CODE HERE\n}",
-                "cpp": "#include <iostream>\n\nvoid solve() {\n    // YOUR CODE HERE\n}"
+                "python": "def solve(args):\\n    # YOUR CODE HERE\\n    pass",
+                "java": "class Solution {\\n    public static void solve() {\\n        // YOUR CODE HERE\\n    }\\n}",
+                "c": "#include <stdio.h>\\n\\nvoid solve() {\\n    // YOUR CODE HERE\\n}",
+                "cpp": "#include <iostream>\\n\\nvoid solve() {\\n    // YOUR CODE HERE\\n}"
             },
             "test_cases": [
                 { "input": "[1, 2]", "expected": "3", "is_hidden": false },

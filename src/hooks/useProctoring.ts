@@ -120,15 +120,60 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
         // keys like 'a', 's', 'd' which are typed in rapid bursts). The "visibilitychange"
         // event above already reliably detects actual tab switches and app switching.
 
+        const handleContextMenu = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            if (target && (target.closest('.monaco-editor') || target.classList.contains('inputarea'))) {
+                return; // Allow context menu inside editor
+            }
+            if (enabledRef.current) {
+                e.preventDefault();
+            }
+        };
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!enabledRef.current) return;
+
+            // CRITICAL: Never interfere with Monaco Editor's keyboard input.
+            // Monaco uses internal <textarea> elements for capturing keystrokes.
+            const target = e.target as HTMLElement;
+            if (target && (target.closest('.monaco-editor') || target.classList.contains('inputarea'))) {
+                return; // Let Monaco handle everything internally
+            }
+
+            // Only block specific dangerous key combinations on non-editor elements
+            const key = e.key;
+
+            if (key === "F12" || (e.ctrlKey && e.shiftKey && key === "I")) {
+                e.preventDefault();
+                return;
+            }
+            if ((e.ctrlKey || e.metaKey) && !e.altKey && (key === "c" || key === "v" || key === "x" || key === "C" || key === "V" || key === "X")) {
+                e.preventDefault();
+                return;
+            }
+            if (e.altKey && key === "Tab") {
+                e.preventDefault();
+                return;
+            }
+            if (key === "PrintScreen") {
+                e.preventDefault();
+                return;
+            }
+        };
+
         // VERSION CHECK: If you see this in console, the latest code is running
-        console.log("[PROCTORING v7] Listeners attached — NO keydown/contextmenu handlers");
+        console.log("[PROCTORING v8] Listeners attached — safe keydown/contextmenu handlers");
 
         document.addEventListener("fullscreenchange", handleFullscreenChange);
         document.addEventListener("visibilitychange", handleVisibilityChange);
+        document.addEventListener("contextmenu", handleContextMenu);
+        document.addEventListener("keydown", handleKeyDown);
 
         return () => {
             document.removeEventListener("fullscreenchange", handleFullscreenChange);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
+            document.removeEventListener("contextmenu", handleContextMenu);
+            document.removeEventListener("keydown", handleKeyDown);
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled]); // Only re-run when enabled changes

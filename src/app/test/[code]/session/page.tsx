@@ -147,7 +147,7 @@ export default function TestSessionPage() {
                 .eq("test_id", testInfo.id)
                 .order('id', { ascending: true });
 
-            if (!qError && qData) {
+            if (!qError && qData && qData.length > 0) {
                 setQuestions(qData);
                 // Initialize default languages for coding questions
                 const initialLanguages: Record<string, string> = {};
@@ -157,6 +157,10 @@ export default function TestSessionPage() {
                     }
                 });
                 setSelectedLanguages(initialLanguages);
+            } else {
+                console.error("Failed to load questions:", qError);
+                toast.error("Failed to load exam questions. Please try again.");
+                router.push('/test');
             }
         };
 

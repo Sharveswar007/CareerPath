@@ -20,6 +20,8 @@ export default function TestSessionPage() {
     const [questions, setQuestions] = useState<any[]>([]);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<string, any>>({});
+    const [visited, setVisited] = useState<Record<string, boolean>>({});
+    const [markedForReview, setMarkedForReview] = useState<Record<string, boolean>>({});
     const [selectedLanguages, setSelectedLanguages] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
@@ -43,7 +45,8 @@ export default function TestSessionPage() {
                 try {
                     const { createClient } = await import("@/lib/supabase/client");
                     const supabase = createClient();
-                    await supabase.from("test_sessions").update({ status: 'terminated' }).eq('id', sessionId);
+                    // Set to 'completed' with no completed_at to distinguish it as a ban (since schema doesn't allow 'terminated')
+                    await supabase.from("test_sessions").update({ status: 'completed' }).eq('id', sessionId);
                     
                     // Log final violation
                     await supabase.from("proctoring_violations").insert({
@@ -84,7 +87,7 @@ export default function TestSessionPage() {
         }
     };
 
-    const { isFullscreen, startProctoring, exitFullscreen, violations } = useProctoring({
+    const { isFullscreen, violations, startProctoring, exitFullscreen, stopProctoring } = useProctoring({
         onViolation: handleViolation,
         maxViolations: MAX_VIOLATIONS,
         enabled: hasStarted && !isKicked
@@ -120,12 +123,17 @@ export default function TestSessionPage() {
             // Fetch session
             const { data: sessionData, error: sessionError } = await supabase
                 .from("test_sessions")
-                .select("id")
+                .select("id, status")
                 .eq("test_id", testInfo.id)
                 .eq("student_id", userData.user.id)
                 .single();
 
             if (sessionError || !sessionData) {
+                router.push('/test');
+                return;
+            }
+            
+            if (sessionData.status === 'completed') {
                 router.push('/test');
                 return;
             }
@@ -158,7 +166,13 @@ export default function TestSessionPage() {
             mounted = false;
             exitFullscreen();
         };
-    }, [code, router]);
+    }, [code, router, exitFullscreen]);
+
+    useEffect(() => {
+        if (questions.length > 0) {
+            setVisited(prev => ({ ...prev, [questions[currentQuestionIndex].id]: true }));
+        }
+    }, [currentQuestionIndex, questions]);
 
     const handleAnswerChange = (questionId: string, value: any) => {
         setAnswers(prev => ({
@@ -212,10 +226,20 @@ export default function TestSessionPage() {
     };
 
     const handleSubmit = async () => {
-        if (!confirm("Are you sure you want to submit your exam? You cannot undo this.")) return;
+        // Disable proctoring FIRST because the native confirm() dialog forces the browser out of full screen,
+        // which triggers a cheating violation before we can stop it.
+        stopProctoring();
+        
+        // Small timeout to allow the proctoring state to update before blocking the thread
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        if (!confirm("Are you sure you want to submit your exam? You cannot undo this.")) {
+            // User cancelled, so re-enable proctoring and return to full screen
+            startProctoring();
+            return;
+        }
         
         setIsSubmitting(true);
-        exitFullscreen();
 
         try {
             const { createClient } = await import("@/lib/supabase/client");
@@ -387,11 +411,20 @@ export default function TestSessionPage() {
                 <div className="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto w-full">
                     <Card className="p-8 border-border/40 bg-background/50 backdrop-blur-xl">
                         
-                        <div className="mb-6">
+                        <div className="mb-6 flex justify-between items-center">
                             <span className="text-xs uppercase tracking-widest text-muted-foreground font-bold">
                                 {currentQuestion.type === 'mcq' ? 'Multiple Choice' : 
                                  currentQuestion.type === 'fill_in_blank' ? 'Fill in the Blank' : 'Coding Challenge'}
                             </span>
+                            <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-muted-foreground hover:text-purple-500 transition-colors">
+                                <input 
+                                    type="checkbox" 
+                                    className="accent-purple-500 w-4 h-4"
+                                    checked={!!markedForReview[currentQuestion.id]}
+                                    onChange={(e) => setMarkedForReview(prev => ({ ...prev, [currentQuestion.id]: e.target.checked }))}
+                                />
+                                Mark for Review
+                            </label>
                         </div>
 
                         {currentQuestion.type === 'mcq' && (
@@ -549,6 +582,55 @@ export default function TestSessionPage() {
                             </Button>
                         </div>
                     </Card>
+                </div>
+                
+                {/* Question Palette Sidebar */}
+                <div className="w-72 border-l border-border/40 bg-background/50 flex flex-col p-6 overflow-y-auto">
+                    <h3 className="font-semibold mb-6 text-sm uppercase tracking-widest text-muted-foreground">Question Palette</h3>
+                    
+                    <div className="grid grid-cols-4 gap-3 mb-8">
+                        {questions.map((q, idx) => {
+                            const isAnswered = !!answers[q.id];
+                            const isMarked = markedForReview[q.id];
+                            const isVisited = visited[q.id];
+                            const isCurrent = currentQuestionIndex === idx;
+                            
+                            let bgClass = "bg-background border-border text-foreground"; // Not visited
+                            
+                            if (isMarked) {
+                                bgClass = "bg-purple-500 text-white border-purple-500";
+                            } else if (isAnswered) {
+                                bgClass = "bg-emerald-500 text-white border-emerald-500";
+                            } else if (isVisited) {
+                                bgClass = "bg-orange-500 text-white border-orange-500";
+                            }
+                            
+                            return (
+                                <button 
+                                    key={q.id}
+                                    onClick={() => setCurrentQuestionIndex(idx)}
+                                    className={`h-12 w-12 rounded-lg flex items-center justify-center font-bold text-sm border-2 transition-all ${bgClass} ${isCurrent ? 'ring-2 ring-violet-500 ring-offset-2 ring-offset-background scale-110' : 'hover:opacity-80 hover:scale-105'}`}
+                                >
+                                    {String(idx + 1).padStart(2, '0')}
+                                </button>
+                            )
+                        })}
+                    </div>
+                    
+                    <div className="space-y-4 text-xs font-medium text-muted-foreground">
+                        <div className="flex items-center gap-3">
+                            <div className="w-5 h-5 border-2 border-border rounded-md" /> Not Visited
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="w-5 h-5 bg-orange-500 rounded-md" /> Not Answered
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="w-5 h-5 bg-emerald-500 rounded-md" /> Answered
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="w-5 h-5 bg-purple-500 rounded-md" /> Marked for Review
+                        </div>
+                    </div>
                 </div>
             </main>
         </div>

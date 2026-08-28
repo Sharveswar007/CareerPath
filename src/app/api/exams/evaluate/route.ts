@@ -70,8 +70,24 @@ export async function POST(request: NextRequest) {
             await sb.from("test_submissions").update({ score: passed }).eq("id", sub.id);
         }
 
-        const mcqScore = mcqs.filter((s: any) => s.is_correct).length;
         const totalMcqs = mcqs.length;
+        const mcqScore = mcqs.filter((s: any) => s.is_correct).length;
+        
+        const totalFibs = fibs.length;
+        const fibScore = fibs.filter((s: any) => s.is_correct).length;
+        
+        let totalCodingTestCases = 0;
+        let codingPassed = 0;
+        
+        for (const sub of coding) {
+             const tcs = sub.test_questions.test_cases || [];
+             totalCodingTestCases += tcs.length;
+             codingPassed += (sub.score || 0);
+        }
+        
+        const maxScore = totalMcqs + totalFibs + totalCodingTestCases;
+        const totalScoreObtained = mcqScore + fibScore + codingPassed;
+        const calculatedPercentage = maxScore > 0 ? Math.round((totalScoreObtained / maxScore) * 100) : 0;
 
         const codingSummary = coding.map((s: any) => ({
             title: s.test_questions.content.title,
@@ -98,7 +114,6 @@ Categorization Guidelines:
 Return strict JSON:
 {
     "coding_category": "no_code | low_code | high_code",
-    "total_score_out_of_100": 85,
     "detailed_report": {
         "summary": "Brief summary of their performance...",
         "strengths": ["...", "..."],
@@ -122,6 +137,7 @@ Return strict JSON:
         }
         
         const evaluation = JSON.parse(content);
+        evaluation.total_score_out_of_100 = calculatedPercentage;
 
         // 4. Save Results
         const { error: resultError } = await sb.from("test_results").upsert({

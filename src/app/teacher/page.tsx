@@ -294,6 +294,21 @@ export default function TeacherDashboard() {
         setLiveSessions([]);
     };
 
+    const handleUnban = async (sessionId: string) => {
+        if (!confirm("Are you sure you want to unban this student? They will be allowed to re-enter the test.")) return;
+        try {
+            const supabase = createClient();
+            const { error } = await supabase.from('test_sessions')
+                .update({ status: 'in_progress', completed_at: null })
+                .eq('id', sessionId);
+            if (error) throw error;
+            toast.success("Student unbanned successfully.");
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to unban student.");
+        }
+    };
+
     const updateTestStatus = async (status: string) => {
         if (!activeTest) return;
         const supabase = createClient();
@@ -670,15 +685,20 @@ export default function TeacherDashboard() {
                                                         <td className="px-4 py-3 font-medium">{session.profiles?.full_name || 'Unknown Student'}</td>
                                                         <td className="px-4 py-3 text-right flex items-center justify-end gap-2">
                                                             <span className={`text-xs px-2 py-1 rounded-full font-medium flex items-center gap-1 ${
-                                                                session.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500' :
-                                                                session.status === 'terminated' ? 'bg-red-500/20 text-red-500 font-bold border border-red-500/30' :
+                                                                session.status === 'completed' && session.completed_at ? 'bg-emerald-500/10 text-emerald-500' :
+                                                                (session.status === 'completed' && !session.completed_at) ? 'bg-red-500/20 text-red-500 font-bold border border-red-500/30' :
                                                                 session.status === 'in_progress' ? 'bg-violet-500/10 text-violet-500' :
                                                                 'bg-gray-500/10 text-gray-500'
                                                             }`}>
-                                                                {session.status === 'terminated' && <ShieldAlert className="w-3 h-3" />}
-                                                                {session.status.toUpperCase()}
+                                                                {(session.status === 'completed' && !session.completed_at) && <ShieldAlert className="w-3 h-3" />}
+                                                                {(session.status === 'completed' && !session.completed_at) ? 'BANNED' : session.status.toUpperCase()}
                                                             </span>
-                                                            {(session.status === 'completed' || session.status === 'terminated') && (
+                                                            {(session.status === 'completed' && !session.completed_at) && (
+                                                                <Button variant="outline" size="sm" className="h-7 text-xs border-emerald-500 text-emerald-500 hover:bg-emerald-500 hover:text-white" onClick={() => handleUnban(session.id)}>
+                                                                    Unban
+                                                                </Button>
+                                                            )}
+                                                            {(session.status === 'completed' && session.completed_at) && (
                                                                 <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setSelectedSession(session)}>
                                                                     <Eye className="w-4 h-4 text-violet-500" />
                                                                 </Button>

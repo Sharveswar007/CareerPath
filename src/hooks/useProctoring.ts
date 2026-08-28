@@ -54,6 +54,7 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
                 await document.documentElement.requestFullscreen();
                 setIsFullscreen(true);
                 isFullscreenRef.current = true;
+                enabledRef.current = true; // Re-enable proctoring flags
                 return true;
             }
             return false;
@@ -80,6 +81,11 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
             console.error("Error attempting to exit fullscreen:", err);
         }
     }, []);
+
+    const stopProctoring = useCallback(async () => {
+        enabledRef.current = false;
+        await exitFullscreen();
+    }, [exitFullscreen]);
 
     // Single effect that registers listeners ONCE and never re-registers
     useEffect(() => {
@@ -167,6 +173,7 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
         isFullscreen,
         violations,
         startProctoring,
-        exitFullscreen
+        exitFullscreen,
+        stopProctoring
     };
 }

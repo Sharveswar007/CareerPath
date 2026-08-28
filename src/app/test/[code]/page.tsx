@@ -57,6 +57,22 @@ export default function TestWaitingRoom() {
                 
                 if (currentTest?.status === 'started') {
                     router.push(`/test/${code}/session`);
+                    return;
+                }
+
+                // Check student's own session status
+                const { data: userData } = await supabase.auth.getUser();
+                if (userData.user) {
+                    const { data: mySession } = await supabase
+                        .from("test_sessions")
+                        .select("status")
+                        .eq("test_id", testData.id)
+                        .eq("student_id", userData.user.id)
+                        .single();
+
+                    if (mySession && mySession.status === 'completed') {
+                        router.push('/test'); // Kicked out
+                    }
                 }
             };
 

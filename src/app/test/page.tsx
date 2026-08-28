@@ -51,17 +51,36 @@ export default function TestJoinPage() {
                 return;
             }
 
-            const { error: sessionError } = await supabase
+            // Check for existing session first
+            const { data: existingSession } = await supabase
                 .from("test_sessions")
-                .insert({
-                    test_id: data.id,
-                    student_id: userData.user.id,
-                    status: 'joined'
-                });
+                .select("status, completed_at")
+                .eq("test_id", data.id)
+                .eq("student_id", userData.user.id)
+                .single();
+                
+            if (existingSession) {
+                if (existingSession.status === 'completed' && !existingSession.completed_at) {
+                    setError("You have been blocked from this test due to malpractice.");
+                    return;
+                }
+                if (existingSession.status === 'completed' && existingSession.completed_at) {
+                    setError("You have already completed this test.");
+                    return;
+                }
+                // If in_progress or joined, they can proceed
+            } else {
+                const { error: sessionError } = await supabase
+                    .from("test_sessions")
+                    .insert({
+                        test_id: data.id,
+                        student_id: userData.user.id,
+                        status: 'joined'
+                    });
 
-            // Ignore uniqueness constraint error if they already joined
-            if (sessionError && !sessionError.message.includes('unique constraint')) {
-                 throw sessionError;
+                if (sessionError) {
+                     throw sessionError;
+                }
             }
 
             router.push(`/test/${code.toUpperCase()}`);

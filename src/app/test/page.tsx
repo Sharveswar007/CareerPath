@@ -30,7 +30,7 @@ export default function TestJoinPage() {
 
             const { data, error: fetchError } = await supabase
                 .from("tests")
-                .select("id, status")
+                .select("id, status, configuration")
                 .eq("code", code.toUpperCase())
                 .single();
 
@@ -54,17 +54,23 @@ export default function TestJoinPage() {
             // Check for existing session first
             const { data: existingSession } = await supabase
                 .from("test_sessions")
-                .select("status, completed_at")
+                .select("id, status, completed_at")
                 .eq("test_id", data.id)
                 .eq("student_id", userData.user.id)
                 .single();
                 
             if (existingSession) {
+                const isUnbanned = data.configuration?.unbanned?.includes(userData.user.id);
+                
                 if (existingSession.status === 'completed' && !existingSession.completed_at) {
-                    setError("You have been blocked from this test due to malpractice.");
-                    return;
-                }
-                if (existingSession.status === 'completed' && existingSession.completed_at) {
+                    if (!isUnbanned) {
+                        setError("You have been blocked from this test due to malpractice.");
+                        return;
+                    } else {
+                        // Student is unbanned! They update their own session status (RLS allows this)
+                        await supabase.from("test_sessions").update({ status: 'in_progress', completed_at: null }).eq('id', existingSession.id);
+                    }
+                } else if (existingSession.status === 'completed' && existingSession.completed_at) {
                     setError("You have already completed this test.");
                     return;
                 }

@@ -297,12 +297,27 @@ export default function TeacherDashboard() {
     const handleUnban = async (sessionId: string) => {
         if (!confirm("Are you sure you want to unban this student? They will be allowed to re-enter the test.")) return;
         try {
-            const supabase = createClient();
-            const { error } = await supabase.from('test_sessions')
-                .update({ status: 'in_progress', completed_at: null })
-                .eq('id', sessionId);
-            if (error) throw error;
+            const res = await fetch('/api/exams/unban', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: sessionId })
+            });
+            
+            if (!res.ok) throw new Error("Failed to unban");
+            
             toast.success("Student unbanned successfully.");
+            // Refresh data
+            const supabase = createClient();
+            if (teacher) fetchTests(supabase, teacher.id);
+            if (activeTest) {
+                // Re-fetch live sessions if modal is open
+                const sb = supabase as any;
+                const { data } = await sb.from('test_sessions').select(`
+                    id, student_id, status, joined_at, completed_at, score,
+                    profiles:student_id ( full_name, email )
+                `).eq('test_id', activeTest.id);
+                if (data) setLiveSessions(data);
+            }
         } catch (error) {
             console.error(error);
             toast.error("Failed to unban student.");

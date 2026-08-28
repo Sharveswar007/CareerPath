@@ -52,7 +52,28 @@ export async function POST(request: NextRequest) {
             
             if (correctAnswer !== undefined && studentAns !== undefined) {
                 if (sub.test_questions.type === 'mcq') {
-                    isCorrect = String(studentAns).trim() === String(correctAnswer).trim();
+                    const sAns = String(studentAns).trim();
+                    const cAns = String(correctAnswer).trim();
+                    const options = sub.test_questions.content?.options || [];
+                    
+                    let match = false;
+                    if (sAns === cAns) match = true;
+                    
+                    // If AI generated "A", "B", etc.
+                    if (!match && /^[A-D]$/i.test(cAns)) {
+                        const idx = cAns.toUpperCase().charCodeAt(0) - 65;
+                        if (options[idx] === sAns) match = true;
+                        if (sAns.toUpperCase().startsWith(cAns.toUpperCase() + ".") || sAns.toUpperCase().startsWith(cAns.toUpperCase() + ")")) match = true;
+                    }
+                    
+                    // Remove prefixes like "A. " or "A) "
+                    if (!match) {
+                        const cleanS = sAns.replace(/^[A-D][\.\)\-]\s*/i, '').toLowerCase();
+                        const cleanC = cAns.replace(/^[A-D][\.\)\-]\s*/i, '').toLowerCase();
+                        if (cleanS === cleanC) match = true;
+                    }
+                    
+                    isCorrect = match;
                 } else if (sub.test_questions.type === 'fill_in_blank') {
                     isCorrect = String(studentAns).trim().toLowerCase() === String(correctAnswer).trim().toLowerCase();
                 }

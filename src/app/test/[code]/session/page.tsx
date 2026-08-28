@@ -465,10 +465,11 @@ export default function TestSessionPage() {
                                     </label>
                                     <div className="border rounded-xl overflow-hidden ring-1 ring-border focus-within:ring-violet-500 transition-all">
                                         <Editor
+                                            key={`fib-${currentQuestion.id}`}
                                             height="150px"
-                                            language="c"
+                                            language="python"
                                             theme="vs-dark"
-                                            value={answers[currentQuestion.id] || ''}
+                                            defaultValue={answers[currentQuestion.id] || ''}
                                             onChange={(val) => handleAnswerChange(currentQuestion.id, val)}
                                             options={{
                                                 minimap: { enabled: false },
@@ -516,10 +517,11 @@ export default function TestSessionPage() {
 
                                 <div className="flex-1 border rounded-xl overflow-hidden relative shadow-lg">
                                     <Editor
+                                        key={`coding-${currentQuestion.id}`}
                                         height="400px"
                                         language={selectedLanguages[currentQuestion.id] || 'python'}
                                         theme="vs-dark"
-                                        value={answers[currentQuestion.id] ?? currentQuestion.content.starter_code?.[selectedLanguages[currentQuestion.id] || 'python'] ?? ''}
+                                        defaultValue={answers[currentQuestion.id] ?? currentQuestion.content.starter_code?.[selectedLanguages[currentQuestion.id] || 'python'] ?? ''}
                                         onChange={(val) => handleAnswerChange(currentQuestion.id, val)}
                                         options={{
                                             minimap: { enabled: false },

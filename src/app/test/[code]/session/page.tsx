@@ -520,20 +520,12 @@ export default function TestSessionPage() {
                                 </div>
 
                                 <div className="flex-1 border rounded-xl overflow-hidden relative shadow-lg">
-                                    <Editor
-                                        path={`coding-${currentQuestion.id}`}
-                                        height="400px"
-                                        language={selectedLanguages[currentQuestion.id] || 'python'}
-                                        theme="vs-dark"
-                                        defaultValue={answers[currentQuestion.id] ?? currentQuestion.content.starter_code?.[selectedLanguages[currentQuestion.id] || 'python'] ?? ''}
-                                        onChange={(val) => handleAnswerChange(currentQuestion.id, val)}
-                                        options={{
-                                            minimap: { enabled: false },
-                                            fontSize: 14,
-                                            lineHeight: 1.6,
-                                            padding: { top: 16, bottom: 16 },
-                                            scrollBeyondLastLine: false,
-                                        }}
+                                    <textarea
+                                        style={{ width: '100%', height: '400px', backgroundColor: '#1e1e1e', color: '#d4d4d4', fontFamily: 'monospace', fontSize: '14px', padding: '16px', border: 'none', outline: 'none', resize: 'none' }}
+                                        value={answers[currentQuestion.id] ?? currentQuestion.content.starter_code?.[selectedLanguages[currentQuestion.id] || 'python'] ?? ''}
+                                        onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
+                                        placeholder="Type your code here... try typing asd"
+                                        spellCheck={false}
                                     />
                                 </div>
 

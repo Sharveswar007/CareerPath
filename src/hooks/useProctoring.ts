@@ -129,7 +129,16 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
         const handleKeyDown = (e: KeyboardEvent) => {
             if (!enabledRef.current) return;
 
-            // Only block specific dangerous key combinations — never block plain letter keys
+            // CRITICAL: Never interfere with Monaco Editor's keyboard input.
+            // Monaco uses internal <textarea> elements for capturing keystrokes.
+            // Any interference (even just running synchronous JS in capture phase)
+            // can disrupt its input pipeline and drop keystrokes like 'a', 's', 'd'.
+            const target = e.target as HTMLElement;
+            if (target && (target.closest('.monaco-editor') || target.classList.contains('inputarea'))) {
+                return; // Let Monaco handle everything internally
+            }
+
+            // Only block specific dangerous key combinations on non-editor elements
             const key = e.key;
 
             if (key === "F12" || (e.ctrlKey && e.shiftKey && key === "I")) {
@@ -153,15 +162,14 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
         document.addEventListener("fullscreenchange", handleFullscreenChange);
         document.addEventListener("visibilitychange", handleVisibilityChange);
         document.addEventListener("contextmenu", handleContextMenu);
-        // Use capture phase for keydown so we intercept BEFORE Monaco processes the event
-        // But only preventDefault on the specific dangerous keys listed above
-        document.addEventListener("keydown", handleKeyDown, true);
+        // Use bubbling phase (default) — NOT capture — so Monaco processes keys first
+        document.addEventListener("keydown", handleKeyDown);
 
         return () => {
             document.removeEventListener("fullscreenchange", handleFullscreenChange);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             document.removeEventListener("contextmenu", handleContextMenu);
-            document.removeEventListener("keydown", handleKeyDown, true);
+            document.removeEventListener("keydown", handleKeyDown);
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled]); // Only re-run when enabled changes

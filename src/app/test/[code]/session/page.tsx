@@ -465,9 +465,9 @@ export default function TestSessionPage() {
                                     </label>
                                     <div className="border rounded-xl overflow-hidden ring-1 ring-border focus-within:ring-violet-500 transition-all">
                                         <Editor
-                                            key={`fib-${currentQuestion.id}`}
+                                            path={`fib-${currentQuestion.id}`}
                                             height="150px"
-                                            language="python"
+                                            language="plaintext"
                                             theme="vs-dark"
                                             defaultValue={answers[currentQuestion.id] || ''}
                                             onChange={(val) => handleAnswerChange(currentQuestion.id, val)}
@@ -517,7 +517,7 @@ export default function TestSessionPage() {
 
                                 <div className="flex-1 border rounded-xl overflow-hidden relative shadow-lg">
                                     <Editor
-                                        key={`coding-${currentQuestion.id}`}
+                                        path={`coding-${currentQuestion.id}`}
                                         height="400px"
                                         language={selectedLanguages[currentQuestion.id] || 'python'}
                                         theme="vs-dark"

@@ -21,6 +21,7 @@ The project is built with Next.js App Router, Supabase (database and auth), and 
 13. Operational Notes and Troubleshooting
 14. Security and Data Ownership
 15. Contribution Guidelines
+16. Docker Setup (Containerization)
 
 ## Project Overview
 
@@ -466,6 +467,70 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 - **Sharveswar M** - [GitHub](https://github.com/Sharveswar007)
 - **Magi Sharma J**
+
+---
+
+## 🐳 Docker Setup (Local PC & Server)
+
+CareerPath can be run in a lightweight, production-optimized container using Docker and Docker Compose. The container uses a multi-stage build (`node:20-slim`) running a standalone Next.js bundle as an unprivileged user on port 3000.
+
+### 1. Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows / macOS) or Docker Engine + Docker Compose plugin (Linux). Ensure Docker is running.
+- Ensure your environment variables are configured in `.env.local`:
+  ```env
+  NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+  GROQ_API_KEY=your_groq_api_key
+  # Optional:
+  TAVILY_API_KEY=your_tavily_key
+  JUDGE0_URL=http://localhost:2358
+  ```
+
+> **💡 Windows PowerShell Tip**: If running `docker` gives the error `The term 'docker' is not recognized`, your terminal hasn't loaded the path yet. Either restart your terminal / VS Code, or run:
+> ```powershell
+> $env:PATH = "C:\Users\sharv\AppData\Local\Programs\DockerDesktop\resources\bin;$env:PATH"
+> ```
+
+---
+
+### 2. Build & Start the Container
+
+To build the image and start the container in the background:
+
+```bash
+docker compose up -d --build
+```
+
+The application will now be running live at **[http://localhost:3000](http://localhost:3000)**.
+
+---
+
+### 3. Essential Docker Commands
+
+| Action | Command |
+| :--- | :--- |
+| **Check container status** | `docker ps` |
+| **View live logs** | `docker compose logs -f` |
+| **Stop the container** | `docker compose down` |
+| **Start without rebuilding** | `docker compose up -d` |
+| **Rebuild after code changes** | `docker compose up -d --build` |
+
+---
+
+### 4. Sharing to Another PC / Server
+
+To move this setup to another system (e.g. your home server or cloud VPS):
+
+1. **Clone the repository on the target machine**:
+   ```bash
+   git clone https://github.com/Sharveswar007/CareerPath.git
+   cd CareerPath
+   ```
+2. **Add your `.env.local`** file with your production API keys.
+3. **Launch the container**:
+   ```bash
+   docker compose up -d --build
+   ```
 
 ---
 

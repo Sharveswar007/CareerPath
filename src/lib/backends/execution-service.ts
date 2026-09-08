@@ -281,12 +281,22 @@ async function executeJudge0(code: string, language: string, stdin: string = "")
             };
         }
 
-        // Check for runtime errors
-        if (result.runtime_error) {
+        // Check for runtime errors / stderr
+        if (result.stderr) {
             return {
                 success: false,
-                output: result.stdout || "",
-                error: result.runtime_error,
+                output: (result.stdout || "").trim(),
+                error: result.stderr,
+                language,
+            };
+        }
+
+        // Check status code (3 = Accepted)
+        if (result.status && result.status.id && result.status.id !== 3) {
+            return {
+                success: false,
+                output: (result.stdout || "").trim(),
+                error: result.message || result.status.description || "Execution failed",
                 language,
             };
         }

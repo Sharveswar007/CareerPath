@@ -195,27 +195,54 @@ export default function TeacherDashboard() {
             const supabase = createClient();
             const sb = supabase as any;
 
-            // Fetch all sessions for this test with student profile
-            const { data: sessions } = await sb.from('test_sessions')
-                .select('id, student_id, status, completed_at, score')
+            console.log("[Export] Exporting report for test:", test?.id, test?.code, test?.status);
+
+            if (!test?.id) {
+                toast.error("Invalid test selected. Please close and reopen the dashboard.");
+                return;
+            }
+
+            toast.loading("Fetching student data...");
+
+            // Fetch all sessions for this test
+            const { data: sessions, error: sessionsError } = await sb.from('test_sessions')
+                .select('id, student_id, status, completed_at')
                 .eq('test_id', test.id);
 
+            if (sessionsError) {
+                console.error("[Export] sessions error:", sessionsError);
+                toast.dismiss();
+                toast.error(`DB error: ${sessionsError.message}`);
+                return;
+            }
+
+            console.log("[Export] Sessions found:", sessions?.length, sessions);
+
             if (!sessions || sessions.length === 0) {
-                toast.error("No student sessions found for this test.");
+                toast.dismiss();
+                toast.error("No student sessions found for this test. Make sure students joined and the exam was completed.");
                 return;
             }
 
             const studentIds = sessions.map((s: any) => s.student_id);
 
             // Fetch profiles
-            const { data: profiles } = await sb.from('profiles')
+            const { data: profiles, error: profilesError } = await sb.from('profiles')
                 .select('id, full_name, email, phone, college, current_education')
                 .in('id', studentIds);
 
+            if (profilesError) {
+                console.warn("[Export] profiles fetch error:", profilesError);
+            }
+
             // Fetch results for scoring and category
-            const { data: results } = await sb.from('test_results')
+            const { data: results, error: resultsError } = await sb.from('test_results')
                 .select('student_id, total_score, coding_category, score_breakdown')
                 .eq('test_id', test.id);
+
+            if (resultsError) {
+                console.warn("[Export] results fetch error:", resultsError);
+            }
 
             const profileMap: Record<string, any> = {};
             profiles?.forEach((p: any) => { profileMap[p.id] = p; });
@@ -265,10 +292,12 @@ export default function TeacherDashboard() {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            toast.success("Test report exported!");
-        } catch (error) {
+            toast.dismiss();
+            toast.success(`Test report exported! (${sessions.length} students)`);
+        } catch (error: any) {
             console.error("Export error:", error);
-            toast.error("Failed to export report.");
+            toast.dismiss();
+            toast.error(`Failed to export report: ${error.message}`);
         }
     };
 
@@ -754,6 +783,11 @@ export default function TeacherDashboard() {
                                             <Button className="flex-1" variant={test.status === 'started' ? 'default' : 'outline'} onClick={() => openLiveDashboard(test)}>
                                                 Manage
                                             </Button>
+                                            {test.status === 'completed' && (
+                                                <Button variant="outline" className="border-emerald-500/50 text-emerald-500 hover:bg-emerald-500/10" onClick={() => exportTestReport(test)} title="Export student results as CSV">
+                                                    <Download className="w-4 h-4" />
+                                                </Button>
+                                            )}
                                             <Button variant="outline" className="text-destructive hover:bg-destructive hover:text-white" onClick={() => deleteTest(test.id)}>
                                                 <Trash2 className="w-4 h-4" />
                                             </Button>

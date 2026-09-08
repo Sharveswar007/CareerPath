@@ -269,5 +269,6 @@ export function TestBuilder({ onSave, isSaving = false, onFormChange }: TestBuil
                 )}
             </div>
         </div>
-    );
+    </div>
+);
 }

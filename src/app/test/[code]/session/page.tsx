@@ -18,6 +18,8 @@ const EDITOR_OPTIONS = {
     lineHeight: 1.6,
     padding: { top: 16, bottom: 16 },
     scrollBeyondLastLine: false,
+    accessibilitySupport: "off" as const,
+    automaticLayout: true,
 };
 
 const FIB_EDITOR_OPTIONS = {
@@ -28,7 +30,8 @@ const FIB_EDITOR_OPTIONS = {
     scrollBeyondLastLine: false,
     lineNumbers: "off" as const,
     folding: false,
-    glyphMargin: false
+    glyphMargin: false,
+    accessibilitySupport: "off" as const,
 };
 
 export default function TestSessionPage() {
@@ -48,6 +51,7 @@ export default function TestSessionPage() {
     const [isKicked, setIsKicked] = useState(false);
     const [showProctorWarning, setShowProctorWarning] = useState(false);
     const [warningReason, setWarningReason] = useState("");
+    const [plainEditorMode, setPlainEditorMode] = useState<Record<string, boolean>>({});
     // Refs to all mounted Monaco editor instances so we can re-focus after proctoring overlays
     const editorRefs = useRef<Record<string, any>>({});
     const MAX_VIOLATIONS = 3;
@@ -520,47 +524,66 @@ export default function TestSessionPage() {
                                         <Code2 className="w-4 h-4 mr-2" />
                                         Code Editor
                                     </label>
-                                    <select 
-                                        value={selectedLanguages[currentQuestion.id] || 'python'}
-                                        onChange={(e) => handleLanguageChange(currentQuestion.id, e.target.value)}
-                                        className="bg-background border border-border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-violet-500"
-                                    >
-                                        <option value="python">Python</option>
-                                        <option value="javascript">JavaScript</option>
-                                        <option value="typescript">TypeScript</option>
-                                        <option value="java">Java</option>
-                                        <option value="c">C</option>
-                                        <option value="cpp">C++</option>
-                                    </select>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-xs h-8 text-muted-foreground hover:text-foreground"
+                                            onClick={() => setPlainEditorMode(prev => ({ ...prev, [currentQuestion.id]: !prev[currentQuestion.id] }))}
+                                            title="Toggle between Monaco Editor and Plain Editor"
+                                        >
+                                            {plainEditorMode[currentQuestion.id] ? "Switch to Monaco" : "Plain Editor"}
+                                        </Button>
+                                        <select 
+                                            value={selectedLanguages[currentQuestion.id] || 'python'}
+                                            onChange={(e) => handleLanguageChange(currentQuestion.id, e.target.value)}
+                                            className="bg-background border border-border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-violet-500"
+                                        >
+                                            <option value="python">Python</option>
+                                            <option value="javascript">JavaScript</option>
+                                            <option value="typescript">TypeScript</option>
+                                            <option value="java">Java</option>
+                                            <option value="c">C</option>
+                                            <option value="cpp">C++</option>
+                                        </select>
+                                    </div>
                                 </div>
 
-                                <div 
-                                    className="flex-1 border rounded-xl overflow-hidden relative shadow-lg"
-                                    // CRITICAL: tabIndex lets the container receive focus, which helps Monaco
-                                    // capture keyboard input in fullscreen mode (fixes asd/key input bug)
-                                    tabIndex={-1}
-                                    onClick={(e) => {
-                                        // When user clicks the editor container, focus the Monaco input area
-                                        const textarea = (e.currentTarget as HTMLElement).querySelector<HTMLTextAreaElement>('textarea.inputarea');
-                                        textarea?.focus();
-                                    }}
-                                >
-                                    <Editor
-                                        path={`coding-${currentQuestion.id}`}
-                                        height="400px"
-                                        language={selectedLanguages[currentQuestion.id] || 'python'}
-                                        theme="vs-dark"
-                                        // Students always start with an empty editor — starter_code is teacher-only
-                                        defaultValue={answers[currentQuestion.id] ?? ''}
-                                        onChange={(val) => handleAnswerChange(currentQuestion.id, val)}
-                                        options={EDITOR_OPTIONS}
-                                        onMount={(editor) => {
-                                            // Store ref and immediately focus so keystrokes work on first render
-                                            editorRefs.current[currentQuestion.id] = editor;
-                                            editor.focus();
+                                {plainEditorMode[currentQuestion.id] ? (
+                                    <div className="flex-1 border rounded-xl overflow-hidden relative shadow-lg">
+                                        <textarea
+                                            className="w-full h-[400px] bg-[#1e1e1e] text-[#d4d4d4] font-mono text-sm p-4 border-none outline-none resize-none leading-relaxed block"
+                                            value={answers[currentQuestion.id] ?? ''}
+                                            onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
+                                            placeholder="Type your code here..."
+                                            spellCheck={false}
+                                            autoCapitalize="off"
+                                            autoComplete="off"
+                                            autoCorrect="off"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div 
+                                        className="flex-1 border rounded-xl overflow-hidden relative shadow-lg"
+                                        onClick={() => {
+                                            editorRefs.current[currentQuestion.id]?.focus();
                                         }}
-                                    />
-                                </div>
+                                    >
+                                        <Editor
+                                            path={`coding-${currentQuestion.id}`}
+                                            height="400px"
+                                            language={selectedLanguages[currentQuestion.id] || 'python'}
+                                            theme="vs-dark"
+                                            defaultValue={answers[currentQuestion.id] ?? ''}
+                                            onChange={(val) => handleAnswerChange(currentQuestion.id, val)}
+                                            options={EDITOR_OPTIONS}
+                                            onMount={(editor) => {
+                                                editorRefs.current[currentQuestion.id] = editor;
+                                                editor.focus();
+                                            }}
+                                        />
+                                    </div>
+                                )}
 
                                 <div className="flex justify-between items-center">
                                     <Button onClick={() => handleRunCode(currentQuestion)} variant="secondary">

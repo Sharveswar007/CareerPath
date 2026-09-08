@@ -39,6 +39,30 @@ function getDraftKey(challengeId: string, language: string): string {
     return `challenge-draft:${challengeId}:${language}`;
 }
 
+function bindEditorKeySafety(editor: any) {
+    if (!editor?.onKeyDown) return;
+    editor.onKeyDown((e: any) => {
+        const key = e.browserEvent?.key;
+        if (
+            (key === 'a' || key === 's' || key === 'd' || key === 'A' || key === 'S' || key === 'D') &&
+            !e.browserEvent?.ctrlKey &&
+            !e.browserEvent?.metaKey &&
+            !e.browserEvent?.altKey
+        ) {
+            e.stopPropagation();
+            e.preventDefault();
+            try {
+                editor.trigger('keyboard', 'type', { text: key });
+            } catch {
+                const selection = editor.getSelection();
+                if (selection) {
+                    editor.executeEdits('keyboard', [{ range: selection, text: key, forceMoveMarkers: true }]);
+                }
+            }
+        }
+    });
+}
+
 function getStarterCode(challengeData: any, language: string): string {
     return String(challengeData?.starterCode?.[language] || "");
 }
@@ -677,7 +701,12 @@ export default function ChallengeDetailPage() {
                             scrollBeyondLastLine: false,
                             automaticLayout: true,
                             tabSize: 4,
-                            padding: { top: 16 }
+                            padding: { top: 16 },
+                            accessibilitySupport: "off",
+                            editContext: false as any,
+                        }}
+                        onMount={(editor) => {
+                            bindEditorKeySafety(editor);
                         }}
                     />
                 </div>

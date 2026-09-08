@@ -20,6 +20,7 @@ const EDITOR_OPTIONS = {
     scrollBeyondLastLine: false,
     accessibilitySupport: "off" as const,
     automaticLayout: true,
+    editContext: false as any,
 };
 
 const FIB_EDITOR_OPTIONS = {
@@ -32,7 +33,33 @@ const FIB_EDITOR_OPTIONS = {
     folding: false,
     glyphMargin: false,
     accessibilitySupport: "off" as const,
+    editContext: false as any,
 };
+
+// Explicitly forces Monaco Editor to accept 'a', 's', 'd' if any internal/extension keybinding captures them
+function bindEditorKeySafety(editor: any) {
+    if (!editor?.onKeyDown) return;
+    editor.onKeyDown((e: any) => {
+        const key = e.browserEvent?.key;
+        if (
+            (key === 'a' || key === 's' || key === 'd' || key === 'A' || key === 'S' || key === 'D') &&
+            !e.browserEvent?.ctrlKey &&
+            !e.browserEvent?.metaKey &&
+            !e.browserEvent?.altKey
+        ) {
+            e.stopPropagation();
+            e.preventDefault();
+            try {
+                editor.trigger('keyboard', 'type', { text: key });
+            } catch {
+                const selection = editor.getSelection();
+                if (selection) {
+                    editor.executeEdits('keyboard', [{ range: selection, text: key, forceMoveMarkers: true }]);
+                }
+            }
+        }
+    });
+}
 
 export default function TestSessionPage() {
     const params = useParams<{ code: string }>();
@@ -502,6 +529,9 @@ export default function TestSessionPage() {
                                             defaultValue={answers[currentQuestion.id] || ''}
                                             onChange={(val) => handleAnswerChange(currentQuestion.id, val)}
                                             options={FIB_EDITOR_OPTIONS}
+                                            onMount={(editor) => {
+                                                bindEditorKeySafety(editor);
+                                            }}
                                         />
                                     </div>
                                 </div>
@@ -580,6 +610,7 @@ export default function TestSessionPage() {
                                             onMount={(editor) => {
                                                 editorRefs.current[currentQuestion.id] = editor;
                                                 editor.focus();
+                                                bindEditorKeySafety(editor);
                                             }}
                                         />
                                     </div>

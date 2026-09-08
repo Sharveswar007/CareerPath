@@ -372,7 +372,10 @@ export default function TeacherDashboard() {
                 .select()
                 .single();
 
-            if (insertError) throw insertError;
+            if (insertError) {
+                console.error("[Custom Test] test insert error:", insertError);
+                throw insertError;
+            }
 
             // Insert questions
             const questionInserts = questions.map(q => {
@@ -381,20 +384,28 @@ export default function TeacherDashboard() {
                 } else if (q.type === 'fill_in_blank') {
                     return { test_id: testData.id, type: 'fill_in_blank', content: { code_snippet: q.code_snippet }, answer: { correct_answer: q.correct_answer } };
                 } else if (q.type === 'coding') {
-                    return { test_id: testData.id, type: 'coding', content: { title: q.title, description: q.description, language: q.language, starter_code: q.starter_code }, test_cases: q.test_cases };
+                    // Note: language is NOT stored — students choose their own language at exam time
+                    return { test_id: testData.id, type: 'coding', content: { title: q.title, description: q.description, starter_code: q.starter_code }, test_cases: q.test_cases };
                 }
                 return null;
             }).filter(Boolean);
 
+            console.log("[Custom Test] Inserting questions:", questionInserts);
+
             const { error: qError } = await sb.from("test_questions").insert(questionInserts);
-            if (qError) throw qError;
+            if (qError) {
+                console.error("[Custom Test] questions insert error:", qError);
+                // If question insert fails, clean up the test row
+                await sb.from('tests').delete().eq('id', testData.id);
+                throw qError;
+            }
 
             toast.success("Custom Test created successfully!");
             setCreateModalOpen(false);
             fetchTests(supabase, teacher.id);
-        } catch (error) {
-            console.error(error);
-            toast.error("Failed to save custom test");
+        } catch (error: any) {
+            console.error("[Custom Test] save error:", error);
+            toast.error(`Failed to save custom test: ${error.message || 'Unknown error'}`);
         } finally {
             setIsCreatingTest(false);
         }
@@ -739,7 +750,7 @@ export default function TeacherDashboard() {
                                             </>
                                         ) : (
                                             <div className="border-t border-border/50 pt-4 mt-2">
-                                                <TestBuilder onSave={handleSaveCustomTest} />
+                                                <TestBuilder onSave={handleSaveCustomTest} isSaving={isCreatingTest} />
                                             </div>
                                         )}
                                     </div>

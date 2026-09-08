@@ -15,9 +15,10 @@ export type CustomQuestion = MCQ | FillInBlank | CodingQuestion;
 
 interface TestBuilderProps {
     onSave: (title: string, questions: CustomQuestion[]) => void;
+    isSaving?: boolean;
 }
 
-export function TestBuilder({ onSave }: TestBuilderProps) {
+export function TestBuilder({ onSave, isSaving = false }: TestBuilderProps) {
     const [title, setTitle] = useState("");
     const [questions, setQuestions] = useState<CustomQuestion[]>([]);
 
@@ -248,8 +249,12 @@ export function TestBuilder({ onSave }: TestBuilderProps) {
                     </div>
                 )}
             </div>
-            <Button className="w-full bg-violet-600 hover:bg-violet-700" disabled={!title || questions.length === 0} onClick={() => onSave(title, questions)}>
-                Save Exam
+            <Button className="w-full bg-violet-600 hover:bg-violet-700" disabled={!title || questions.length === 0 || isSaving} onClick={() => onSave(title, questions)}>
+                {isSaving ? (
+                    <><span className="animate-spin mr-2">⏳</span> Saving Exam...</>
+                ) : (
+                    'Save Exam'
+                )}
             </Button>
         </div>
     );

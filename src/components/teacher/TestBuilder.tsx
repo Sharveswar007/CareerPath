@@ -16,52 +16,71 @@ export type CustomQuestion = MCQ | FillInBlank | CodingQuestion;
 interface TestBuilderProps {
     onSave: (title: string, questions: CustomQuestion[]) => void;
     isSaving?: boolean;
+    onFormChange?: (title: string, questions: CustomQuestion[]) => void;
 }
 
-export function TestBuilder({ onSave, isSaving = false }: TestBuilderProps) {
+export function TestBuilder({ onSave, isSaving = false, onFormChange }: TestBuilderProps) {
     const [title, setTitle] = useState("");
     const [questions, setQuestions] = useState<CustomQuestion[]>([]);
 
+    // Notify parent of current state whenever it changes
+    const notifyChange = (newTitle: string, newQuestions: CustomQuestion[]) => {
+        onFormChange?.(newTitle, newQuestions);
+    };
+
     const addMCQ = () => {
-        setQuestions([...questions, { id: Date.now().toString(), type: 'mcq', question: '', options: ['', '', '', ''], correct_answer: '' }]);
+        const newQs = [...questions, { id: Date.now().toString(), type: 'mcq' as const, question: '', options: ['', '', '', ''], correct_answer: '' }];
+        setQuestions(newQs); notifyChange(title, newQs);
     };
 
     const addFillInBlank = () => {
-        setQuestions([...questions, { id: Date.now().toString(), type: 'fill_in_blank', code_snippet: '', correct_answer: '' }]);
+        const newQs = [...questions, { id: Date.now().toString(), type: 'fill_in_blank' as const, code_snippet: '', correct_answer: '' }];
+        setQuestions(newQs); notifyChange(title, newQs);
     };
 
     const addCoding = () => {
-        setQuestions([...questions, { id: Date.now().toString(), type: 'coding', title: '', description: '', starter_code: '', test_cases: [] }]);
+        const newQs = [...questions, { id: Date.now().toString(), type: 'coding' as const, title: '', description: '', starter_code: '', test_cases: [] }];
+        setQuestions(newQs); notifyChange(title, newQs);
     };
 
     const removeQuestion = (id: string) => {
-        setQuestions(questions.filter(q => q.id !== id));
+        const newQs = questions.filter(q => q.id !== id);
+        setQuestions(newQs); notifyChange(title, newQs);
     };
 
     const updateQuestion = (id: string, field: string, value: any) => {
-        setQuestions(questions.map(q => q.id === id ? { ...q, [field]: value } : q));
+        const newQs = questions.map(q => q.id === id ? { ...q, [field]: value } : q);
+        setQuestions(newQs); notifyChange(title, newQs);
     };
 
     const updateMCQOption = (id: string, index: number, value: string) => {
-        setQuestions(questions.map(q => {
+        const newQs = questions.map(q => {
             if (q.id === id && q.type === 'mcq') {
                 const newOptions = [...q.options];
                 newOptions[index] = value;
-                return { ...q, options: newOptions };
+                const updated = { ...q, options: newOptions };
+                return updated;
             }
             return q;
-        }));
+        });
+        setQuestions(newQs);
+        notifyChange(title, newQs);
     };
 
     return (
-        <div className="space-y-6">
+        <div className="flex flex-col gap-4">
+            {/* Scrollable content area */}
+            <div className="space-y-6">
             <div className="space-y-2">
                 <Label htmlFor="custom-title">Exam Title</Label>
                 <Input 
                     id="custom-title" 
                     placeholder="e.g. Midterm Assessment" 
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+                    onChange={(e) => {
+                        setTitle(e.target.value);
+                        notifyChange(e.target.value, questions);
+                    }}
                 />
             </div>
 
@@ -249,13 +268,6 @@ export function TestBuilder({ onSave, isSaving = false }: TestBuilderProps) {
                     </div>
                 )}
             </div>
-            <Button className="w-full bg-violet-600 hover:bg-violet-700" disabled={!title || questions.length === 0 || isSaving} onClick={() => onSave(title, questions)}>
-                {isSaving ? (
-                    <><span className="animate-spin mr-2">⏳</span> Saving Exam...</>
-                ) : (
-                    'Save Exam'
-                )}
-            </Button>
         </div>
     );
 }

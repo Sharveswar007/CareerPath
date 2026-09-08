@@ -29,6 +29,8 @@ export default function TeacherDashboard() {
     const [focusArea, setFocusArea] = useState("");
     const [difficulty, setDifficulty] = useState("Medium");
     const [createModalOpen, setCreateModalOpen] = useState(false);
+    // Track custom form state so we can render Save button outside the scroll area
+    const [customFormData, setCustomFormData] = useState<{ title: string; questions: any[] }>({ title: '', questions: [] });
 
     // Live Test State
     const [liveTestModalOpen, setLiveTestModalOpen] = useState(false);
@@ -749,11 +751,36 @@ export default function TeacherDashboard() {
                                                 </div>
                                             </>
                                         ) : (
-                                            <div className="border-t border-border/50 pt-4 mt-2">
-                                                <TestBuilder onSave={handleSaveCustomTest} isSaving={isCreatingTest} />
+                                            <div className="flex-1 min-h-0 overflow-y-auto border-t border-border/50 pt-4 mt-2">
+                                                <TestBuilder 
+                                                    onSave={handleSaveCustomTest} 
+                                                    isSaving={isCreatingTest}
+                                                    onFormChange={(t, q) => setCustomFormData({ title: t, questions: q })}
+                                                />
                                             </div>
                                         )}
                                     </div>
+                                    {/* Save Exam button — lives OUTSIDE the scroll area so it's always visible */}
+                                    {testType === 'custom' && (
+                                        <div className="px-0 pt-4 border-t border-border/50">
+                                            {(!customFormData.title || customFormData.questions.length === 0) && (
+                                                <p className="text-xs text-muted-foreground text-center mb-2">
+                                                    {!customFormData.title ? 'Enter an exam title to enable saving' : 'Add at least one question to enable saving'}
+                                                </p>
+                                            )}
+                                            <Button
+                                                className="w-full bg-violet-600 hover:bg-violet-700"
+                                                disabled={!customFormData.title || customFormData.questions.length === 0 || isCreatingTest}
+                                                onClick={() => handleSaveCustomTest(customFormData.title, customFormData.questions)}
+                                            >
+                                                {isCreatingTest ? (
+                                                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving Exam...</>
+                                                ) : (
+                                                    'Save Exam'
+                                                )}
+                                            </Button>
+                                        </div>
+                                    )}
                                 </DialogContent>
                             </Dialog>
                         </div>

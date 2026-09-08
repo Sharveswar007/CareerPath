@@ -162,7 +162,7 @@ export default function TeacherDashboard() {
             : 0
     };
 
-    // --- CSV Export ---
+    // --- CSV Export (all students) ---
     const exportCSV = () => {
         const headers = ["Student Name", "Email", "College", "Average Score", "Total Assessments"];
         const rows = students.map(student => {
@@ -187,6 +187,89 @@ export default function TeacherDashboard() {
         link.click();
         document.body.removeChild(link);
         toast.success("CSV Exported successfully!");
+    };
+
+    // --- Per-Test Report Export ---
+    const exportTestReport = async (test: any) => {
+        try {
+            const supabase = createClient();
+            const sb = supabase as any;
+
+            // Fetch all sessions for this test with student profile
+            const { data: sessions } = await sb.from('test_sessions')
+                .select('id, student_id, status, completed_at, score')
+                .eq('test_id', test.id);
+
+            if (!sessions || sessions.length === 0) {
+                toast.error("No student sessions found for this test.");
+                return;
+            }
+
+            const studentIds = sessions.map((s: any) => s.student_id);
+
+            // Fetch profiles
+            const { data: profiles } = await sb.from('profiles')
+                .select('id, full_name, email, phone, college, current_education')
+                .in('id', studentIds);
+
+            // Fetch results for scoring and category
+            const { data: results } = await sb.from('test_results')
+                .select('student_id, total_score, coding_category, score_breakdown')
+                .eq('test_id', test.id);
+
+            const profileMap: Record<string, any> = {};
+            profiles?.forEach((p: any) => { profileMap[p.id] = p; });
+
+            const resultMap: Record<string, any> = {};
+            results?.forEach((r: any) => { resultMap[r.student_id] = r; });
+
+            const testTitle = test.configuration?.title || (test.generation_type === 'ai_generated' ? 'AI Assessment' : 'Custom Assessment');
+            const testCode = test.code;
+
+            const headers = [
+                "Name",
+                "Email",
+                "Phone",
+                "College / Section",
+                "Degree / Roll No",
+                "Status",
+                "Score",
+                "Category (No/Low/High Code)",
+                "Completed At"
+            ];
+
+            const rows = sessions.map((session: any) => {
+                const profile = profileMap[session.student_id] || {};
+                const result = resultMap[session.student_id] || {};
+                const isCompleted = session.status === 'completed' && session.completed_at;
+                const status = isCompleted ? 'Completed' : (session.status === 'completed' ? 'Malpractice' : session.status);
+                return [
+                    `"${profile.full_name || 'Unknown'}"`,
+                    `"${profile.email || '-'}"`,
+                    `"${profile.phone || '-'}"`,
+                    `"${profile.college || '-'}"`,
+                    `"${profile.current_education || '-'}"`,
+                    `"${status}"`,
+                    result.total_score !== undefined ? result.total_score : '-',
+                    `"${result.coding_category || '-'}"`,
+                    session.completed_at ? `"${new Date(session.completed_at).toLocaleString()}"` : '-'
+                ];
+            });
+
+            const csvContent = [headers, ...rows].map(r => r.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.setAttribute("href", URL.createObjectURL(blob));
+            link.setAttribute("download", `${testTitle}_${testCode}_report_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            toast.success("Test report exported!");
+        } catch (error) {
+            console.error("Export error:", error);
+            toast.error("Failed to export report.");
+        }
     };
 
     const generateRandomCode = () => {
@@ -708,6 +791,11 @@ export default function TeacherDashboard() {
                                     {activeTest.status === 'started' && (
                                         <Button onClick={() => updateTestStatus('completed')} variant="destructive">
                                             End Exam
+                                        </Button>
+                                    )}
+                                    {activeTest.status === 'completed' && (
+                                        <Button onClick={() => exportTestReport(activeTest)} variant="outline" className="border-emerald-500/50 text-emerald-500 hover:bg-emerald-500/10">
+                                            <Download className="w-4 h-4 mr-2" /> Export Report
                                         </Button>
                                     )}
                                 </div>

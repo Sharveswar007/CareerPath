@@ -205,20 +205,22 @@ async function executeJavaScriptNative(code: string, stdin: string = ""): Promis
     }
 }
 
-// Try Judge0 API - Free, no auth required
+// Try Judge0 API
 async function executeJudge0(code: string, language: string, stdin: string = ""): Promise<ExecutionResult | null> {
     try {
         // Judge0 language IDs
         const judge0Languages: Record<string, number> = {
             python: 71,      // Python 3
             python3: 71,
+            py: 71,
             javascript: 63,   // Node.js
             js: 63,
             java: 62,        // Java
             cpp: 54,         // C++ (gcc)
             "c++": 54,
             c: 50,           // C (gcc)
-            typescript: 63,  // Run as JavaScript
+            typescript: 74,  // TypeScript
+            ts: 74,
         };
 
         const languageId = judge0Languages[language.toLowerCase()];
@@ -226,14 +228,31 @@ async function executeJudge0(code: string, language: string, stdin: string = "")
 
         console.log("[ExecutionService] Judge0 request - language ID:", languageId);
 
+        // Allow overriding Judge0 URL via environment variable
+        // This is useful when hosting your own Judge0 CE instance
+        let judge0Url = process.env.JUDGE0_URL;
+        const isRapidApi = !judge0Url || judge0Url.includes("rapidapi.com");
+        
+        if (!judge0Url) {
+            judge0Url = "https://judge0-ce.p.rapidapi.com";
+        }
+        
+        // Remove trailing slash if present
+        judge0Url = judge0Url.replace(/\/$/, "");
+
+        const headers: Record<string, string> = {
+            "Content-Type": "application/json",
+        };
+
+        if (isRapidApi) {
+            headers["X-RapidAPI-Key"] = process.env.RAPIDAPI_KEY || "16726e4f4dmsh53eeca2383340c0p1f24dfjsnc4ecfdf6f9d5";
+            headers["X-RapidAPI-Host"] = judge0Url.replace("https://", "").split("/")[0];
+        }
+
         // Step 1: Submit code for execution
-        const submitResponse = await fetch("https://judge0.p.rapidapi.com/submissions?base64_encoded=false&wait=true", {
+        const submitResponse = await fetch(`${judge0Url}/submissions?base64_encoded=false&wait=true`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-RapidAPI-Key": "16726e4f4dmsh53eeca2383340c0p1f24dfjsnc4ecfdf6f9d5",
-                "X-RapidAPI-Host": "judge0.p.rapidapi.com"
-            },
+            headers,
             body: JSON.stringify({
                 language_id: languageId,
                 source_code: code,
@@ -244,7 +263,8 @@ async function executeJudge0(code: string, language: string, stdin: string = "")
         });
 
         if (!submitResponse.ok) {
-            console.error("[ExecutionService] Judge0 HTTP error:", submitResponse.status);
+            const errText = await submitResponse.text().catch(() => "");
+            console.error("[ExecutionService] Judge0 HTTP error:", submitResponse.status, errText);
             return null;
         }
 
@@ -392,9 +412,18 @@ export async function executeCodeViaBackend(
         };
     }
 
-    // Try Wandbox first (PRIMARY) for all languages
-    console.log("[ExecutionService] Trying Wandbox (primary)...");
-    let result = await executeWandbox(code, langKey, stdin);
+    let result: ExecutionResult | null = null;
+
+    // If a custom Judge0 URL is provided, prioritize it
+    if (process.env.JUDGE0_URL) {
+        console.log("[ExecutionService] Custom JUDGE0_URL detected. Trying Judge0 first...");
+        result = await executeJudge0(code, langKey, stdin);
+        if (result) return result;
+    }
+
+    // Try Wandbox first (PRIMARY) if no custom Judge0 is set
+    console.log("[ExecutionService] Trying Wandbox...");
+    result = await executeWandbox(code, langKey, stdin);
     if (result) return result;
 
     // Fallback to native execution if Wandbox fails
@@ -404,25 +433,25 @@ export async function executeCodeViaBackend(
     if (langKey === "javascript" || langKey === "js" || langKey === "typescript") {
         console.log("[ExecutionService] Trying native JavaScript execution...");
         const nativeResult = await executeJavaScriptNative(code, stdin);
-        if (nativeResult) return nativeResult;
+        if (nativeResult && nativeResult.success) return nativeResult;
     }
 
     // For Python, try native execution
     if (langKey === "python" || langKey === "py") {
         console.log("[ExecutionService] Trying native Python execution...");
         const nativeResult = await executePythonNative(code, stdin);
-        if (nativeResult) return nativeResult;
+        if (nativeResult && nativeResult.success) return nativeResult;
     }
 
     // For Java, try native execution
     if (langKey === "java") {
         console.log("[ExecutionService] Trying native Java execution...");
         const nativeResult = await executeJavaNative(code, stdin);
-        if (nativeResult) return nativeResult;
+        if (nativeResult && nativeResult.success) return nativeResult;
     }
 
     // Try Judge0 as last fallback
-    if (["cpp", "c", "java"].includes(langKey)) {
+    if (["python", "py", "javascript", "js", "typescript", "cpp", "c", "java"].includes(langKey)) {
         console.log("[ExecutionService] Trying Judge0 as last fallback...");
         result = await executeJudge0(code, langKey, stdin);
         if (result) return result;

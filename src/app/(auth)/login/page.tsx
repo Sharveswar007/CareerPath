@@ -97,26 +97,26 @@ export default function LoginPage() {
                             full_name: fullName,
                             role: role,
                         },
-                        emailRedirectTo: `${window.location.origin}/auth/callback`,
                     },
                 });
 
                 if (error) throw error;
                 
-                // If Supabase auto-logs in (Confirm Email is OFF), redirect immediately
-                if (data.session) {
-                    toast.success("Account created successfully!");
-                    if (role === "teacher") {
-                        router.push("/teacher");
-                    } else {
-                        router.push("/dashboard");
-                    }
-                    router.refresh();
-                } else {
-                    // If Confirm Email is ON, tell them to check email
-                    toast.success("Registration successful! Check your email to verify.");
-                    setIsRegister(false); // Switch to login view
+                // If session is not immediately returned, sign in directly
+                if (!data.session) {
+                    await supabase.auth.signInWithPassword({
+                        email,
+                        password,
+                    });
                 }
+
+                toast.success("Account created successfully!");
+                if (role === "teacher") {
+                    router.push("/teacher");
+                } else {
+                    router.push("/dashboard");
+                }
+                router.refresh();
             } else {
                 // Login
                 const { data, error } = await supabase.auth.signInWithPassword({

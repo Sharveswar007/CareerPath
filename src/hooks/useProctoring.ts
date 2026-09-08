@@ -134,10 +134,20 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
             if (!enabledRef.current) return;
 
             // CRITICAL: Never interfere with Monaco Editor's keyboard input.
-            // Monaco uses internal <textarea> elements for capturing keystrokes.
+            // Monaco uses internal <textarea class="inputarea"> elements for capturing keystrokes.
+            // We check the target AND walk up the DOM to be sure.
             const target = e.target as HTMLElement;
-            if (target && (target.closest('.monaco-editor') || target.classList.contains('inputarea'))) {
-                return; // Let Monaco handle everything internally
+            const isInsideMonaco = !!(
+                target &&
+                (
+                    target.classList.contains('inputarea') ||
+                    target.closest('.monaco-editor') ||
+                    target.closest('[data-uri]') || // Monaco model nodes
+                    target.getAttribute('role') === 'textbox'
+                )
+            );
+            if (isInsideMonaco) {
+                return; // Let Monaco handle everything internally — do NOT call preventDefault
             }
 
             // Only block specific dangerous key combinations on non-editor elements
@@ -162,7 +172,7 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
         };
 
         // VERSION CHECK: If you see this in console, the latest code is running
-        console.log("[PROCTORING v8] Listeners attached — safe keydown/contextmenu handlers");
+        console.log("[PROCTORING v9] Listeners attached — strengthened Monaco keydown guard (fixes asd bug)");
 
         document.addEventListener("fullscreenchange", handleFullscreenChange);
         document.addEventListener("visibilitychange", handleVisibilityChange);

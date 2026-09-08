@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useProctoring } from "@/hooks/useProctoring";
-import Editor from "@monaco-editor/react";
+import Editor, { OnMount } from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -48,6 +48,8 @@ export default function TestSessionPage() {
     const [isKicked, setIsKicked] = useState(false);
     const [showProctorWarning, setShowProctorWarning] = useState(false);
     const [warningReason, setWarningReason] = useState("");
+    // Refs to all mounted Monaco editor instances so we can re-focus after proctoring overlays
+    const editorRefs = useRef<Record<string, any>>({});
     const MAX_VIOLATIONS = 3;
 
     const handleViolation = async (violationCount: number, reason: string) => {
@@ -168,7 +170,7 @@ export default function TestSessionPage() {
 
             if (!qError && qData && qData.length > 0) {
                 setQuestions(qData);
-                // Initialize default languages for coding questions
+                // Initialize default languages for coding questions — student picks any language
                 const initialLanguages: Record<string, string> = {};
                 qData.forEach(q => {
                     if (q.type === 'coding') {
@@ -213,7 +215,8 @@ export default function TestSessionPage() {
 
     const handleRunCode = async (question: any) => {
         const lang = selectedLanguages[question.id] || 'python';
-        const studentCode = answers[question.id] || question.content.starter_code?.[lang] || "";
+        // Use current answer code (student's own code — starter_code is NOT shown to students)
+        const studentCode = answers[question.id] || "";
         const visibleTestCases = question.test_cases?.filter((tc: any) => !tc.is_hidden) || [];
         
         let passed = 0;
@@ -523,21 +526,39 @@ export default function TestSessionPage() {
                                         className="bg-background border border-border rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-violet-500"
                                     >
                                         <option value="python">Python</option>
+                                        <option value="javascript">JavaScript</option>
+                                        <option value="typescript">TypeScript</option>
                                         <option value="java">Java</option>
                                         <option value="c">C</option>
                                         <option value="cpp">C++</option>
                                     </select>
                                 </div>
 
-                                <div className="flex-1 border rounded-xl overflow-hidden relative shadow-lg">
+                                <div 
+                                    className="flex-1 border rounded-xl overflow-hidden relative shadow-lg"
+                                    // CRITICAL: tabIndex lets the container receive focus, which helps Monaco
+                                    // capture keyboard input in fullscreen mode (fixes asd/key input bug)
+                                    tabIndex={-1}
+                                    onClick={(e) => {
+                                        // When user clicks the editor container, focus the Monaco input area
+                                        const textarea = (e.currentTarget as HTMLElement).querySelector<HTMLTextAreaElement>('textarea.inputarea');
+                                        textarea?.focus();
+                                    }}
+                                >
                                     <Editor
                                         path={`coding-${currentQuestion.id}`}
                                         height="400px"
                                         language={selectedLanguages[currentQuestion.id] || 'python'}
                                         theme="vs-dark"
-                                        defaultValue={answers[currentQuestion.id] ?? currentQuestion.content.starter_code?.[selectedLanguages[currentQuestion.id] || 'python'] ?? ''}
+                                        // Students always start with an empty editor — starter_code is teacher-only
+                                        defaultValue={answers[currentQuestion.id] ?? ''}
                                         onChange={(val) => handleAnswerChange(currentQuestion.id, val)}
                                         options={EDITOR_OPTIONS}
+                                        onMount={(editor) => {
+                                            // Store ref and immediately focus so keystrokes work on first render
+                                            editorRefs.current[currentQuestion.id] = editor;
+                                            editor.focus();
+                                        }}
                                     />
                                 </div>
 

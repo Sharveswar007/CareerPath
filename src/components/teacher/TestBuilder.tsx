@@ -5,13 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trash2, Plus, GripVertical, CheckCircle2 } from "lucide-react";
 
 export type MCQ = { id: string; type: 'mcq'; question: string; options: string[]; correct_answer: string };
 export type FillInBlank = { id: string; type: 'fill_in_blank'; code_snippet: string; correct_answer: string };
-export type CodingQuestion = { id: string; type: 'coding'; title: string; description: string; language: string; starter_code: string; test_cases: { input: string; expected: string; is_hidden: boolean }[] };
+export type CodingQuestion = { id: string; type: 'coding'; title: string; description: string; starter_code: string; test_cases: { input: string; expected: string; is_hidden: boolean }[] };
 export type CustomQuestion = MCQ | FillInBlank | CodingQuestion;
 
 interface TestBuilderProps {
@@ -31,7 +30,7 @@ export function TestBuilder({ onSave }: TestBuilderProps) {
     };
 
     const addCoding = () => {
-        setQuestions([...questions, { id: Date.now().toString(), type: 'coding', title: '', description: '', language: 'python', starter_code: '', test_cases: [] }]);
+        setQuestions([...questions, { id: Date.now().toString(), type: 'coding', title: '', description: '', starter_code: '', test_cases: [] }]);
     };
 
     const removeQuestion = (id: string) => {
@@ -116,6 +115,21 @@ export function TestBuilder({ onSave }: TestBuilderProps) {
                                             </div>
                                         ))}
                                     </div>
+                                    <div className="space-y-2 pt-2 border-t border-border/40">
+                                        <Label className="text-emerald-500">✓ Correct Answer</Label>
+                                        <Input 
+                                            value={q.correct_answer} 
+                                            onChange={(e) => updateQuestion(q.id, 'correct_answer', e.target.value)} 
+                                            placeholder="Type the exact correct option text here (must match one of the options above)" 
+                                            className="border-emerald-500/40 focus:border-emerald-500"
+                                        />
+                                        {q.correct_answer && q.options.includes(q.correct_answer) && (
+                                            <p className="text-xs text-emerald-500 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Matches option</p>
+                                        )}
+                                        {q.correct_answer && !q.options.includes(q.correct_answer) && (
+                                            <p className="text-xs text-amber-500">⚠ Does not match any option above</p>
+                                        )}
+                                    </div>
                                 </>
                             )}
 
@@ -144,24 +158,11 @@ export function TestBuilder({ onSave }: TestBuilderProps) {
 
                             {q.type === 'coding' && (
                                 <>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label>Title</Label>
-                                            <Input value={q.title} onChange={(e) => updateQuestion(q.id, 'title', e.target.value)} placeholder="Two Sum" />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Language</Label>
-                                            <Select value={q.language} onValueChange={(val) => updateQuestion(q.id, 'language', val)}>
-                                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="python">Python</SelectItem>
-                                                    <SelectItem value="java">Java</SelectItem>
-                                                    <SelectItem value="c">C</SelectItem>
-                                                    <SelectItem value="cpp">C++</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
+                                    <div className="space-y-2">
+                                        <Label>Title</Label>
+                                        <Input value={q.title} onChange={(e) => updateQuestion(q.id, 'title', e.target.value)} placeholder="Two Sum" />
                                     </div>
+                                    <p className="text-xs text-muted-foreground bg-muted/40 px-3 py-2 rounded-lg border border-dashed">💡 Students can code in any language (Python, Java, C, C++). The starter code below is a reference template only — students will NOT see it. Write the test cases to validate their output.</p>
                                     <div className="space-y-2">
                                         <Label>Description</Label>
                                         <Textarea value={q.description} onChange={(e) => updateQuestion(q.id, 'description', e.target.value)} placeholder="Given an array of integers..." />

@@ -17,7 +17,7 @@ jobs:
 
       # package-lock.json is gitignored in this repo, so npm ci is not available
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm ci --legacy-peer-deps
 
       - name: Typecheck
         run: npx tsc --noEmit

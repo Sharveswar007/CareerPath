@@ -136,8 +136,9 @@ export default function ExamsPage() {
     // Fetch AI-generated updates when exam is selected
     useEffect(() => {
         if (!selectedExamData) {
-            setUpdates([]);
-            return;
+            // async boundary: clearing on deselect must not cascade synchronously
+            const t = setTimeout(() => setUpdates([]), 0);
+            return () => clearTimeout(t);
         }
 
         const fetchUpdates = async () => {

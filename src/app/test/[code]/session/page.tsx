@@ -225,9 +225,14 @@ export default function TestSessionPage() {
     }, [code, router, exitFullscreen]);
 
     useEffect(() => {
-        if (questions.length > 0) {
-            setVisited(prev => ({ ...prev, [questions[currentQuestionIndex].id]: true }));
-        }
+        if (questions.length === 0) return;
+        const id = questions[currentQuestionIndex].id;
+        // async boundary: mark-visited must not cascade a synchronous re-render
+        const t = setTimeout(
+            () => setVisited(prev => (prev[id] ? prev : { ...prev, [id]: true })),
+            0
+        );
+        return () => clearTimeout(t);
     }, [currentQuestionIndex, questions]);
 
     const handleAnswerChange = (questionId: string, value: any) => {

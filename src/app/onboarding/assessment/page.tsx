@@ -61,7 +61,7 @@ export default function AssessmentPage() {
     const [answers, setAnswers] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [phase, setPhase] = useState<"career_knowledge" | "aptitude" | "situation">("career_knowledge");
+    // (phase is derived below from the current question)
 
     // Proctoring State
     const [examStarted, setExamStarted] = useState(false);
@@ -176,16 +176,12 @@ export default function AssessmentPage() {
     }, [supabase, router]);
 
     const currentQuestion = questions[currentIndex];
+    // Derived from the current question (previously synced via setState-in-effect)
+    const phase = (currentQuestion?.category ?? "career_knowledge") as "career_knowledge" | "aptitude" | "situation";
     const questionContent = currentQuestion ? splitQuestionContent(currentQuestion.question) : null;
     const progress = ((currentIndex + 1) / questions.length) * 100;
     const careerQuestions = questions.filter((q) => q.category === "career_knowledge");
     const logicQuestions = questions.filter((q) => q.category === "aptitude" || q.category === "situation");
-
-    useEffect(() => {
-        if (currentQuestion) {
-            setPhase(currentQuestion.category);
-        }
-    }, [currentQuestion]);
 
     const handleAnswer = (value: string) => {
         setAnswers((prev) => ({

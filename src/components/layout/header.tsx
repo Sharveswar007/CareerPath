@@ -46,7 +46,9 @@ export function Header() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     useEffect(() => {
-        setMounted(true);
+        // async boundary: avoid a synchronous setState inside the effect
+        const id = requestAnimationFrame(() => setMounted(true));
+        return () => cancelAnimationFrame(id);
     }, []);
 
     const toggleTheme = () => {

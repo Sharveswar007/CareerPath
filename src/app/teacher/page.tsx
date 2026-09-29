@@ -42,6 +42,38 @@ export default function TeacherDashboard() {
     const [selectedSession, setSelectedSession] = useState<any>(null);
     const [sessionDetails, setSessionDetails] = useState<any>(null);
 
+    const fetchTests = async (supabase: any, teacherId: string) => {
+        const sb = supabase as any;
+        const { data } = await sb.from('tests')
+            .select('*')
+            .eq('creator_id', teacherId)
+            .order('created_at', { ascending: false });
+        if (data) setTests(data);
+    };
+
+    const fetchStudents = async (supabase: any, teacherEmail: string) => {
+        const sb = supabase as any;
+        
+        // 1. Fetch Students
+        const { data: studentData } = await sb.from('profiles')
+            .select('*')
+            .eq('faculty_advisor_email', teacherEmail);
+            
+        if (studentData) {
+            setStudents(studentData);
+            
+            // 2. Fetch their test results for analytics
+            const studentIds = studentData.map((s: any) => s.id);
+            if (studentIds.length > 0) {
+                const { data: resultsData } = await sb.from('test_results')
+                    .select('*, tests(configuration, generation_type)')
+                    .in('student_id', studentIds);
+                
+                if (resultsData) setTestResults(resultsData);
+            }
+        }
+    };
+
     useEffect(() => {
         const init = async () => {
             const supabase = createClient();
@@ -113,38 +145,6 @@ export default function TeacherDashboard() {
         };
     }, [liveTestModalOpen, activeTest?.id]); // Only re-run if modal opens or active test changes
 
-
-    const fetchTests = async (supabase: any, teacherId: string) => {
-        const sb = supabase as any;
-        const { data } = await sb.from('tests')
-            .select('*')
-            .eq('creator_id', teacherId)
-            .order('created_at', { ascending: false });
-        if (data) setTests(data);
-    };
-
-    const fetchStudents = async (supabase: any, teacherEmail: string) => {
-        const sb = supabase as any;
-        
-        // 1. Fetch Students
-        const { data: studentData } = await sb.from('profiles')
-            .select('*')
-            .eq('faculty_advisor_email', teacherEmail);
-            
-        if (studentData) {
-            setStudents(studentData);
-            
-            // 2. Fetch their test results for analytics
-            const studentIds = studentData.map((s: any) => s.id);
-            if (studentIds.length > 0) {
-                const { data: resultsData } = await sb.from('test_results')
-                    .select('*, tests(configuration, generation_type)')
-                    .in('student_id', studentIds);
-                
-                if (resultsData) setTestResults(resultsData);
-            }
-        }
-    };
 
     // --- Analytics Calculations ---
     const getStudentStats = (studentId: string) => {
@@ -539,9 +539,11 @@ export default function TeacherDashboard() {
     };
 
     useEffect(() => {
-        if (selectedSession) {
-            fetchSessionDetails(selectedSession.id);
-        }
+        if (!selectedSession) return;
+        // async boundary: the fetcher sets state, which must not cascade
+        // synchronously during the effect
+        const t = setTimeout(() => fetchSessionDetails(selectedSession.id), 0);
+        return () => clearTimeout(t);
     }, [selectedSession]);
 
     if (loading) {

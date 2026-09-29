@@ -117,6 +117,28 @@ export default function AIQuizPage() {
         enabled: examStarted && !showResults && !isKicked, // Disable proctoring once kicked
     });
 
+    const generateQuestions = async (career: string) => {
+        setGenerating(true);
+        try {
+            const response = await fetch("/api/assessment/generate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ career, questionCount: 20 }),
+            });
+
+            if (!response.ok) throw new Error("Failed to generate questions");
+
+            const data = await response.json();
+            setQuestions(data.questions || []);
+            toast.success(`Generated ${data.totalQuestions} questions for ${career}`);
+        } catch (error) {
+            console.error("Generation error:", error);
+            toast.error("Failed to generate questions. Please try again.");
+        } finally {
+            setGenerating(false);
+        }
+    };
+
     useEffect(() => {
         const loadQuestions = async () => {
             const { data: { user } } = await supabase.auth.getUser();
@@ -149,28 +171,6 @@ export default function AIQuizPage() {
         loadQuestions();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-
-    const generateQuestions = async (career: string) => {
-        setGenerating(true);
-        try {
-            const response = await fetch("/api/assessment/generate", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ career, questionCount: 20 }),
-            });
-
-            if (!response.ok) throw new Error("Failed to generate questions");
-
-            const data = await response.json();
-            setQuestions(data.questions || []);
-            toast.success(`Generated ${data.totalQuestions} questions for ${career}`);
-        } catch (error) {
-            console.error("Generation error:", error);
-            toast.error("Failed to generate questions. Please try again.");
-        } finally {
-            setGenerating(false);
-        }
-    };
 
     const currentQuestion = questions[currentQuestionIndex];
     const progress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;

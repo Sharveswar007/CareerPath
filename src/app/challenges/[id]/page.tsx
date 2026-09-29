@@ -227,20 +227,18 @@ export default function ChallengeDetailPage() {
         fetchChallenge();
     }, [params.id]);
 
-    // Update code when language changes
-    useEffect(() => {
-        if (!challengeData?.id) return;
+    // Compute the editor code when the challenge or language changes:
+    // prefer the saved draft, then the starter code. Derived during render
+    // (keyed on the draft key) instead of a setState-in-effect round-trip.
+    const [lastCodeKey, setLastCodeKey] = useState<string | null>(null);
+    const codeKey = challengeData ? getDraftKey(challengeData.id, language) : null;
 
-        const draftKey = getDraftKey(challengeData.id, language);
-        const savedDraft = typeof window !== "undefined" ? localStorage.getItem(draftKey) : null;
-
-        if (savedDraft !== null) {
-            setCode(savedDraft);
-            return;
-        }
-
-        setCode(getStarterCode(challengeData, language));
-    }, [language, challengeData]);
+    if (challengeData && codeKey && codeKey !== lastCodeKey) {
+        const savedDraft = typeof window !== "undefined" ? localStorage.getItem(codeKey) : null;
+        const nextCode = savedDraft !== null ? savedDraft : getStarterCode(challengeData, language);
+        setLastCodeKey(codeKey);
+        setCode(nextCode);
+    }
 
     useEffect(() => {
         if (!challengeData?.id) return;

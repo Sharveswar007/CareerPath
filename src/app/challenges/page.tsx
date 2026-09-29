@@ -75,6 +75,43 @@ export default function ChallengesPage() {
 
     const supabase = createClient();
 
+    // Function to refresh challenges from database
+    const refreshChallenges = useCallback(async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const [challengesResult, submissionsResult] = await Promise.all([
+            supabase
+                .from("coding_challenges")
+                .select("*")
+                .eq("user_id", user.id)
+                .order("created_at", { ascending: false }),
+            supabase
+                .from("coding_submissions")
+                .select("challenge_id")
+                .eq("user_id", user.id)
+                .eq("status", "passed"),
+        ]);
+
+        const solvedIds = new Set(
+            (submissionsResult.data || []).map(s => s.challenge_id)
+        );
+
+        if (challengesResult.data) {
+            const dbChallenges = challengesResult.data.map(c => ({
+                id: c.id,
+                title: c.title,
+                difficulty: c.difficulty,
+                category: c.category,
+                description: c.description,
+                solved: solvedIds.has(c.id),
+                isGenerated: true,
+                isRecommended: c.is_recommended,
+            }));
+            setChallenges(dbChallenges);
+        }
+    }, [supabase]);
+
     // Function to generate challenges in background
     const generateChallengesInBackground = useCallback(async (career: string, count: number) => {
         setAutoGenerating(true);
@@ -121,43 +158,6 @@ export default function ChallengesPage() {
             setAutoGenerating(false);
         }
     }, []);
-
-    // Function to refresh challenges from database
-    const refreshChallenges = useCallback(async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const [challengesResult, submissionsResult] = await Promise.all([
-            supabase
-                .from("coding_challenges")
-                .select("*")
-                .eq("user_id", user.id)
-                .order("created_at", { ascending: false }),
-            supabase
-                .from("coding_submissions")
-                .select("challenge_id")
-                .eq("user_id", user.id)
-                .eq("status", "passed"),
-        ]);
-
-        const solvedIds = new Set(
-            (submissionsResult.data || []).map(s => s.challenge_id)
-        );
-
-        if (challengesResult.data) {
-            const dbChallenges = challengesResult.data.map(c => ({
-                id: c.id,
-                title: c.title,
-                difficulty: c.difficulty,
-                category: c.category,
-                description: c.description,
-                solved: solvedIds.has(c.id),
-                isGenerated: true,
-                isRecommended: c.is_recommended,
-            }));
-            setChallenges(dbChallenges);
-        }
-    }, [supabase]);
 
     useEffect(() => {
         const fetchData = async () => {

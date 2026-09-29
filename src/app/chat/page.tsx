@@ -44,26 +44,6 @@ export default function ChatPage() {
         setCurrentSessionId,
     } = useChatStore();
 
-    // Load chat history on mount
-    useEffect(() => {
-        loadChatHistory();
-    }, []);
-
-    // Auto-scroll to bottom when new messages arrive
-    useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
-    }, [messages]);
-
-    // Auto-resize textarea
-    useEffect(() => {
-        if (textareaRef.current) {
-            textareaRef.current.style.height = "auto";
-            textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
-        }
-    }, [input]);
-
     const loadChatHistory = async () => {
         try {
             setLoadingHistory(true);
@@ -80,6 +60,28 @@ export default function ChatPage() {
             setLoadingHistory(false);
         }
     };
+
+    // Load chat history on mount (async boundary: the fetcher sets state,
+    // which must not cascade synchronously during the effect)
+    useEffect(() => {
+        const t = setTimeout(() => loadChatHistory(), 0);
+        return () => clearTimeout(t);
+    }, []);
+
+    // Auto-scroll to bottom when new messages arrive
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+    }, [messages]);
+
+    // Auto-resize textarea
+    useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.style.height = "auto";
+            textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+        }
+    }, [input]);
 
     const loadSession = (session: ChatSession) => {
         const formattedMessages = session.messages.map((msg, i) => ({

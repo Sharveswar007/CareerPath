@@ -3,10 +3,12 @@
 # Safe to re-run: every step is idempotent.
 #
 # Optional flags:
+#   -Model       AI model to run (default: CodeLlama-13B-Instruct-AWQ)
 #   -SkipVllm    don't (re)start the AI container
 #   -SkipTunnel  don't start the public tunnel containers
 
 param(
+    [string]$Model = "TheBloke/CodeLlama-13B-Instruct-AWQ",
     [switch]$SkipVllm,
     [switch]$SkipTunnel
 )
@@ -30,7 +32,7 @@ docker compose -f "$root\judge0\docker-compose.yml" up -d
 # 2. vLLM (the AI)
 if (-not $SkipVllm) {
     Write-Host "`n[2/4] vLLM (AI)..." -ForegroundColor Yellow
-    & powershell -ExecutionPolicy Bypass -File "$root\vllm\start-vllm.ps1"
+    & powershell -ExecutionPolicy Bypass -File "$root\vllm\start-vllm.ps1" -Model $Model
 } else {
     Write-Host "`n[2/4] vLLM skipped (-SkipVllm)" -ForegroundColor DarkGray
 }

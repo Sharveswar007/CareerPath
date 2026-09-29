@@ -2,13 +2,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import Groq from "groq-sdk";
+import { groq, AI_MODEL } from "@/lib/groq/client";
 import { getTopResources, LearningResource } from "@/lib/resources";
 import { searchLearningResources } from "@/lib/tavily/client";
 
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY,
-});
 
 interface SubmittedQuestion {
     question: string;
@@ -180,7 +177,7 @@ Return JSON format:
 Return ONLY valid JSON, no markdown.`;
 
         const analysisResponse = await groq.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
+            model: AI_MODEL,
             messages: [
                 {
                     role: "system",

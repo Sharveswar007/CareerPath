@@ -10,7 +10,7 @@ Every command in this guide is designed for **Windows PowerShell**.
 1. [Architecture Overview](#1-architecture-overview)
 2. [Prerequisites on Windows](#2-prerequisites-on-windows)
 3. [Folder Setup on Windows](#3-folder-setup-on-windows)
-4. [Step 1: Deploy vLLM 8B AI Model (GPU Accelerated)](#step-1-deploy-vllm-8b-ai-model-gpu-accelerated)
+4. [Step 1: Deploy vLLM CodeLlama-13B (GPU Accelerated)](#step-1-deploy-vllm-codellama-13b-gpu-accelerated)
 5. [Step 2: Deploy Self-Hosted Supabase](#step-2-deploy-self-hosted-supabase)
 6. [Step 3: Deploy Judge0 Code Sandbox](#step-3-deploy-judge0-code-sandbox)
 7. [Step 4: Connect Windows Services to Vercel via Cloudflare Tunnel](#step-4-connect-windows-services-to-vercel-via-cloudflare-tunnel)
@@ -37,7 +37,7 @@ Your RTX 5090 Windows PC acts as the **high-performance backend server** running
 │          YOUR WINDOWS SERVER (RTX 5090 32GB, 64GB RAM)           │
 │                                                                  │
 │  ┌────────────────────────┐  ┌────────────────────────────────┐  │
-│  │   vLLM (8B AI Model)   │  │    Supabase Stack (Port 8000)  │  │
+│  │   vLLM CodeLlama-13B   │  │    Supabase Stack (Port 8000)  │  │
 │  │  Port 8001 (RTX 5090)  │  │    PostgreSQL on Port 5432     │  │
 │  │  OpenAI-compatible API │  │    Auth, Studio, REST API      │  │
 │  └────────────────────────┘  └────────────────────────────────┘  │
@@ -90,44 +90,45 @@ New-Item -ItemType Directory -Force -Path "C:\CareerPath-Server\hf-cache"
 
 ---
 
-## Step 1: Deploy vLLM 8B AI Model (GPU Accelerated)
+## Step 1: Deploy vLLM CodeLlama-13B (GPU Accelerated)
 
-vLLM utilizes the RTX 5090's **32GB VRAM** and massive memory bandwidth to serve your 8B model with continuous batching (handling 25-40 concurrent active generations).
+vLLM utilizes the RTX 5090's **32GB VRAM** and massive memory bandwidth to serve CodeLlama-13B-Instruct (AWQ 4-bit) with continuous batching. Realistic ceiling for this model: **~15-20 concurrent active generations** (its no-GQA architecture saturates the KV cache quickly; `--max-num-seqs 32` is the hard cap).
 
-### 1. Choose Your Model:
-- **Option A (Meta Llama 3.1 8B Instruct - Recommended)**:
-  Requires an approved Hugging Face token from [huggingface.co/meta-llama/Llama-3.1-8B-Instruct](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct).
-- **Option B (Qwen 2.5 Coder 7B / 8B Instruct - Open Access, No Token Required)**:
-  `Qwen/Qwen2.5-Coder-7B-Instruct` or `mistralai/Mistral-7B-Instruct-v0.3`.
+### 1. Model (final choice): CodeLlama-13B-Instruct (AWQ 4-bit)
+- Repo: **`TheBloke/CodeLlama-13B-Instruct-AWQ`** — open access (no HF token needed), ~8GB download.
+- AWQ 4-bit leaves ~20GB of the 32GB VRAM for KV cache — the only practical way a 13B fits this workload on one card.
+- vLLM enforces `response_format: json_object` server-side (guided decoding), so the app's quiz/resume JSON parsing keeps working even though CodeLlama's native JSON discipline is weaker.
+- Swapping models later is one command (e.g. to `Qwen/Qwen3-14B-FP8` for ~3x concurrency and stronger general quality).
 
 ### 2. Start vLLM in PowerShell:
 Run the following in PowerShell (replace `your_hf_token_here` with your Hugging Face token if using Llama):
 
 ```powershell
-docker run -d --name vllm-8b `
+docker run -d --name vllm `
   --restart unless-stopped `
   --gpus all `
   --ipc=host `
   -p 8001:8000 `
   -v "C:\CareerPath-Server\hf-cache:/root/.cache/huggingface" `
-  -e HUGGING_FACE_HUB_TOKEN="your_hf_token_here" `
   vllm/vllm-openai:latest `
-  --model meta-llama/Llama-3.1-8B-Instruct `
-  --max-model-len 4096 `
-  --gpu-memory-utilization 0.88 `
-  --kv-cache-dtype auto
+  --model TheBloke/CodeLlama-13B-Instruct-AWQ `
+  --served-model-name careerpath-ai `
+  --max-model-len 8192 `
+  --max-num-seqs 32 `
+  --gpu-memory-utilization 0.92 `
+  --kv-cache-dtype fp8
 ```
 
 ### 3. Monitor First-Time Model Download:
 ```powershell
-docker logs -f vllm-8b
+docker logs -f vllm
 ```
-*(On first run, vLLM will download the model weights (~16GB) to `C:\CareerPath-Server\hf-cache`. Once ready, you will see `Route: /v1/chat/completions, Methods: POST`).*
+*(On first run, vLLM will download the AWQ weights (~8GB) to `C:\CareerPath-Server\hf-cache`. Once ready, you will see `Route: /v1/chat/completions, Methods: POST`).*
 
 ### 4. Test vLLM via PowerShell:
 ```powershell
 $body = @{
-    model = "meta-llama/Llama-3.1-8B-Instruct"
+    model = "careerpath-ai"
     messages = @(
         @{ role = "user"; content = "Give me 1 career tip for a software engineer." }
     )
@@ -238,7 +239,7 @@ In the Tunnel settings under **Public Hostnames**, add these 3 routes:
 Now, test in your Windows browser:
 - `https://supabase.yourdomain.com` $\rightarrow$ Opens your local Supabase Studio securely from the internet!
 - `https://judge0.yourdomain.com/system_info` $\rightarrow$ Returns Judge0 status!
-- `https://vllm.yourdomain.com/v1/models` $\rightarrow$ Returns your 8B model!
+- `https://vllm.yourdomain.com/v1/models` $\rightarrow$ Returns your CodeLlama model!
 
 ---
 
@@ -264,7 +265,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://supabase.yourdomain.com
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_from_env_file
 
 AI_BASE_URL=https://vllm.yourdomain.com/v1
-AI_MODEL=meta-llama/Llama-3.1-8B-Instruct
+AI_MODEL=careerpath-ai
 GROQ_API_KEY=dummy_build_key
 
 JUDGE0_URL=https://judge0.yourdomain.com
@@ -310,9 +311,9 @@ Here is your quick PowerShell cheat sheet for maintenance:
 | :--- | :--- |
 | **Check all running services** | `docker ps` |
 | **Check GPU usage & VRAM** | `nvidia-smi` |
-| **Check vLLM AI generation logs** | `docker logs -f vllm-8b` |
+| **Check vLLM AI generation logs** | `docker logs -f vllm` |
 | **Check Judge0 execution logs** | `cd C:\CareerPath-Server\judge0; docker compose logs -f` |
 | **Check Supabase database logs** | `cd C:\CareerPath-Server\supabase\supabase-docker; docker compose logs -f` |
-| **Restart vLLM** | `docker restart vllm-8b` |
-| **Stop all services temporarily** | `docker stop vllm-8b cloudflared; cd C:\CareerPath-Server\judge0; docker compose down; cd C:\CareerPath-Server\supabase\supabase-docker; docker compose down` |
-| **Start all services** | `docker start vllm-8b cloudflared; cd C:\CareerPath-Server\judge0; docker compose up -d; cd C:\CareerPath-Server\supabase\supabase-docker; docker compose up -d` |
+| **Restart vLLM** | `docker restart vllm` |
+| **Stop all services temporarily** | `docker stop vllm cloudflared; cd C:\CareerPath-Server\judge0; docker compose down; cd C:\CareerPath-Server\supabase\supabase-docker; docker compose down` |
+| **Start all services** | `docker start vllm cloudflared; cd C:\CareerPath-Server\judge0; docker compose up -d; cd C:\CareerPath-Server\supabase\supabase-docker; docker compose up -d` |

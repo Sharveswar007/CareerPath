@@ -3,7 +3,7 @@
 // Vercel-compatible: Uses unpdf for text PDFs, OCR.space for image-based PDFs/images
 
 import { NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { groq, AI_MODEL } from "@/lib/groq/client";
 import { extractText, getDocumentProxy } from "unpdf";
 
 // Use Node.js runtime for proper module support
@@ -13,9 +13,6 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 // Initialize Groq client
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY,
-});
 
 // Helper: Extract text from PDF using unpdf (for text-based PDFs)
 async function extractTextFromPDF(uint8Array: Uint8Array): Promise<string> {
@@ -227,7 +224,7 @@ Return JSON only:
                     content: validationPrompt,
                 },
             ],
-            model: "groq/compound-mini",
+            model: AI_MODEL,
             temperature: 0.1,
             max_tokens: 300,
             response_format: { type: "json_object" },
@@ -296,7 +293,7 @@ Return JSON only:
                     content: prompt,
                 },
             ],
-            model: "groq/compound-mini",
+            model: AI_MODEL,
             temperature: 0.1,
             response_format: { type: "json_object" },
         });

@@ -61,17 +61,20 @@ interface QuizResult {
 export default function QuizResultsPage() {
     const router = useRouter();
     const { resetQuiz } = useSessionStore();
-    const [result, setResult] = useState<QuizResult | null>(null);
     const [selectedCareer, setSelectedCareer] = useState<number>(0);
 
-    useEffect(() => {
+    // Read persisted result lazily so the effect doesn't set state synchronously
+    const [result, setResult] = useState<QuizResult | null>(() => {
+        if (typeof window === "undefined") return null;
         const storedResult = localStorage.getItem("quizResult");
-        if (storedResult) {
-            setResult(JSON.parse(storedResult));
-        } else {
+        return storedResult ? (JSON.parse(storedResult) as QuizResult) : null;
+    });
+
+    useEffect(() => {
+        if (!result) {
             router.push("/quiz");
         }
-    }, [router]);
+    }, [result, router]);
 
     const handleRetake = () => {
         resetQuiz();

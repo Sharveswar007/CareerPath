@@ -3,6 +3,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -503,10 +504,13 @@ export default function ProfilePage() {
                             >
                                 <div className="h-24 w-24 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/30 shadow-xl overflow-hidden">
                                     {profile?.avatar_url ? (
-                                        <img
+                                        <Image
                                             src={profile.avatar_url}
                                             alt="Avatar"
                                             className="h-full w-full object-cover"
+                                            width={96}
+                                            height={96}
+                                            unoptimized
                                         />
                                     ) : (
                                         <User className="h-10 w-10 text-white" />
@@ -750,7 +754,7 @@ export default function ProfilePage() {
                                             </h3>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
-                                                    <label className="text-sm font-medium mb-1 block">Father's Name</label>
+                                                    <label className="text-sm font-medium mb-1 block">Father&apos;s Name</label>
                                                     <Input
                                                         value={editForm.father_name}
                                                         onChange={(e) => setEditForm({ ...editForm, father_name: e.target.value })}
@@ -758,7 +762,7 @@ export default function ProfilePage() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="text-sm font-medium mb-1 block">Mother's Name</label>
+                                                    <label className="text-sm font-medium mb-1 block">Mother&apos;s Name</label>
                                                     <Input
                                                         value={editForm.mother_name}
                                                         onChange={(e) => setEditForm({ ...editForm, mother_name: e.target.value })}
@@ -766,7 +770,7 @@ export default function ProfilePage() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="text-sm font-medium mb-1 block">Father's Email</label>
+                                                    <label className="text-sm font-medium mb-1 block">Father&apos;s Email</label>
                                                     <Input
                                                         type="email"
                                                         value={editForm.father_email}
@@ -775,7 +779,7 @@ export default function ProfilePage() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="text-sm font-medium mb-1 block">Mother's Email</label>
+                                                    <label className="text-sm font-medium mb-1 block">Mother&apos;s Email</label>
                                                     <Input
                                                         type="email"
                                                         value={editForm.mother_email}
@@ -784,7 +788,7 @@ export default function ProfilePage() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="text-sm font-medium mb-1 block">Father's Phone</label>
+                                                    <label className="text-sm font-medium mb-1 block">Father&apos;s Phone</label>
                                                     <Input
                                                         value={editForm.father_phone}
                                                         onChange={(e) => setEditForm({ ...editForm, father_phone: e.target.value })}
@@ -792,7 +796,7 @@ export default function ProfilePage() {
                                                     />
                                                 </div>
                                                 <div>
-                                                    <label className="text-sm font-medium mb-1 block">Mother's Phone</label>
+                                                    <label className="text-sm font-medium mb-1 block">Mother&apos;s Phone</label>
                                                     <Input
                                                         value={editForm.mother_phone}
                                                         onChange={(e) => setEditForm({ ...editForm, mother_phone: e.target.value })}

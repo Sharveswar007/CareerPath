@@ -310,7 +310,7 @@ export async function POST(request: NextRequest) {
             .select("title")
             .eq("user_id", user.id);
 
-        const existingTitles = new Set((existingChallenges || []).map((c: any) => c.title));
+        const existingTitles = new Set((existingChallenges || []).map((c: { title: string | null }) => c.title));
 
         // Filter out challenges user already has
         const availableChallenges = CHALLENGE_LIBRARY.filter(
@@ -330,11 +330,12 @@ export async function POST(request: NextRequest) {
         const shuffled = availableChallenges.sort(() => Math.random() - 0.5);
         const selected = shuffled.slice(0, toGenerate);
 
-        const generatedChallenges: any[] = [];
+        const generatedChallenges: unknown[] = [];
 
         for (const challenge of selected) {
-            const { data, error } = await supabase
-                .from("coding_challenges")
+            const { data, error } = await (supabase
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any -- static library payload, shape matches table
+                .from("coding_challenges") as any)
                 .insert({
                     user_id: user.id,
                     title: challenge.title,
@@ -344,7 +345,7 @@ export async function POST(request: NextRequest) {
                     starter_code: challenge.starter_code,
                     test_cases: challenge.test_cases,
                     is_recommended: true,
-                } as any)
+                })
                 .select()
                 .single();
 
@@ -359,8 +360,8 @@ export async function POST(request: NextRequest) {
             challenges: generatedChallenges,
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Bulk generate error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: error instanceof Error ? error.message : "Bulk generate failed" }, { status: 500 });
     }
 }

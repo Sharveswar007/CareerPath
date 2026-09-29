@@ -151,7 +151,7 @@ export default function DashboardPage() {
                                 Welcome back, {user?.user_metadata?.full_name || "User"}!
                             </h1>
                             <p className="text-muted-foreground">
-                                Here's your career progress today
+                                Here&apos;s your career progress today
                             </p>
                         </div>
                     </div>
@@ -307,7 +307,7 @@ export default function DashboardPage() {
                             <div className="relative">
                                 <h2 className="text-2xl font-bold mb-2">Keep Going! 🚀</h2>
                                 <p className="text-white/80 mb-6">
-                                    You're making great progress. Every challenge you solve brings you closer to your dream career.
+                                    You&apos;re making great progress. Every challenge you solve brings you closer to your dream career.
                                 </p>
                                 <div className="flex gap-3">
                                     <Button asChild variant="secondary" className="bg-white text-violet-600 hover:bg-white/90">

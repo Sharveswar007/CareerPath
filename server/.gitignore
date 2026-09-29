@@ -1,0 +1,3 @@
+# Generated secrets - never commit
+supabase/docker/.env
+.env.server

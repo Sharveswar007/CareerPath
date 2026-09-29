@@ -1,80 +1,121 @@
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { generateStructured } from "@/lib/ai/structured";
+import { acquireAiSlot, rateLimit, LIMITS } from "@/lib/ai/limits";
+import { requestIdentifier, clientIp } from "@/lib/ai/identify";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
+import { z } from "zod";
 
 export const runtime = "nodejs";
 
 type CodingChallengeInsert = Database['public']['Tables']['coding_challenges']['Insert'];
 
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY!,
+const challengeSchema = z.object({
+    title: z.string().min(1),
+    description: z.string().min(1),
+    difficulty: z.string().optional(),
+    category: z.string().optional(),
+    starter_code: z.record(z.string(), z.string()).optional(),
+    test_cases: z.array(z.object({
+        input: z.string().optional(),
+        expected: z.string().optional(),
+    })).optional(),
 });
 
 export async function POST(request: NextRequest) {
+    const identifier = await requestIdentifier(request).catch(() => `ip:${clientIp(request)}`);
+    const rl = rateLimit(identifier, LIMITS.AI_PER_MINUTE);
+    if (!rl.allowed) {
+        return NextResponse.json(
+            { error: "Too many requests - please wait a moment and try again." },
+            { status: 429, headers: { "Retry-After": String(rl.retryAfterSec ?? 30) } }
+        );
+    }
+
+    const slot = acquireAiSlot();
+    if (!slot.acquired) {
+        return NextResponse.json(
+            { error: "The AI is busy right now - please retry in a few seconds." },
+            { status: 503, headers: { "Retry-After": "10" } }
+        );
+    }
+
     try {
         const { career, difficulty } = await request.json();
-
         if (!career) {
             return NextResponse.json({ error: "Career required" }, { status: 400 });
         }
 
         const prompt = `Generate a coding challenge for a "${career}" interview.
-    Difficulty: ${difficulty || "Medium"}.
-        
-        Return strict JSON structure:
-{
-    "title": "Problem Title",
-        "description": "MarkDown description of the problem...",
-            "difficulty": "${difficulty || "medium"}",
-                "category": "Topic (e.g. Arrays, API, Database)",
-                    "starter_code": {
-        "python": "# Write your solution here\\ndef solve():\\n    pass",
-        "java": "class Solution {\\n    public static void solve() {\\n\\n    }\\n}",
-        "c": "#include <stdio.h>\\n\\nvoid solve() {\\n\\n}",
-        "cpp": "#include <iostream>\\n\\nvoid solve() {\\n\\n}"
-    },
-    "test_cases": [
-        { "input": "...", "expected": "..." }
-    ]
-}
-`;
+Difficulty: ${difficulty || "Medium"}.
 
-        const completion = await groq.chat.completions.create({
-            model: "groq/compound-mini",
+Return a JSON object with:
+- "title": Problem Title
+- "description": Markdown description of the problem
+- "difficulty": "${difficulty || "medium"}"
+- "category": Topic (e.g. Arrays, API, Database)
+- "starter_code": object with keys "python", "java", "c", "cpp" - each an empty skeleton with comments like "# Write your solution here" (no solutions)
+- "test_cases": array of { "input": "...", "expected": "..." } (3-5 cases)`;
+
+        const challenge = await generateStructured({
+            schema: challengeSchema,
             messages: [{ role: "user", content: prompt }],
             temperature: 0.6,
-            response_format: { type: "json_object" },
+            maxTokens: 2048,
+            jsonSchema: {
+                type: "object",
+                properties: {
+                    title: { type: "string" },
+                    description: { type: "string" },
+                    difficulty: { type: "string" },
+                    category: { type: "string" },
+                    starter_code: {
+                        type: "object",
+                        properties: {
+                            python: { type: "string" },
+                            java: { type: "string" },
+                            c: { type: "string" },
+                            cpp: { type: "string" },
+                        },
+                    },
+                    test_cases: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: { input: { type: "string" }, expected: { type: "string" } },
+                            required: ["input", "expected"],
+                        },
+                    },
+                },
+                required: ["title", "description"],
+            },
         });
-
-        const content = completion.choices[0]?.message?.content || "{}";
-        const challenge = JSON.parse(content);
 
         // Save to Supabase
         let savedChallenge;
         try {
             const supabase = await createClient();
 
-            // Normalize difficulty to valid enum value
             const normalizedDifficulty = (
                 challenge.difficulty?.toLowerCase() === "easy" ? "easy" :
                     challenge.difficulty?.toLowerCase() === "hard" ? "hard" : "medium"
             ) as "easy" | "medium" | "hard";
 
-            // Create properly typed insert object
             const insertData: CodingChallengeInsert = {
-                title: String(challenge.title || "Untitled Challenge"),
-                description: String(challenge.description || ""),
+                title: challenge.title,
+                description: challenge.description,
                 difficulty: normalizedDifficulty,
-                category: String(challenge.category || "General"),
+                category: challenge.category || "General",
                 starter_code: challenge.starter_code || null,
                 test_cases: challenge.test_cases || [],
             };
 
-            // Cast to any to bypass generic inference issues while keeping data type safety via insertData
-            const { data, error } = await (supabase
-                .from("coding_challenges") as any)
-                .insert(insertData)
+            // Loose typing at the Supabase boundary: insertData is built from
+            // AI output, so we validate shape manually rather than fighting generics.
+            const { data, error } = await supabase
+                .from("coding_challenges")
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI-generated payload, shape validated above
+                .insert(insertData as any)
                 .select()
                 .single();
 
@@ -90,8 +131,13 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(savedChallenge || challenge);
 
-    } catch (error: any) {
-        console.error("Challenge Gen Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    } catch (error: unknown) {
+        console.error("Challenge Gen Error:", error instanceof Error ? error.message : error);
+        return NextResponse.json(
+            { error: "Failed to generate a valid challenge - please try again." },
+            { status: 502 }
+        );
+    } finally {
+        slot.release();
     }
 }

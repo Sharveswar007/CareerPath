@@ -12,6 +12,9 @@ interface ExecutionResult {
     output: string;
     error: string | null;
     language: string;
+    // When true, this failure may be environment/sandbox-related rather than
+    // a user-code problem, so the chain should try the next provider.
+    retryable?: boolean;
 }
 
 // Try to find Python executable
@@ -61,8 +64,9 @@ async function executePythonNative(code: string, stdin: string = ""): Promise<Ex
             error: null,
             language: "python",
         };
-    } catch (e: any) {
-        const errorMessage = e.stderr?.toString() || e.message || String(e);
+    } catch (e) {
+        const err = e as { stderr?: { toString(): string }; message?: string };
+        const errorMessage = err.stderr?.toString() || err.message || String(e);
         console.error("[ExecutionService] Python execution failed:", errorMessage);
         
         return {
@@ -115,8 +119,9 @@ public class Code_${randomUUID().replace(/-/g, "")} {
             error: null,
             language: "java",
         };
-    } catch (e: any) {
-        const errorMessage = e.stderr?.toString() || e.message || String(e);
+    } catch (e) {
+        const err = e as { stderr?: { toString(): string }; message?: string };
+        const errorMessage = err.stderr?.toString() || err.message || String(e);
         console.error("[ExecutionService] Java execution failed:", errorMessage);
         
         return {
@@ -185,8 +190,9 @@ async function executeJavaScriptNative(code: string, stdin: string = ""): Promis
             error: null,
             language: "javascript",
         };
-    } catch (e: any) {
-        const errorMessage = e.stderr?.toString() || e.message || String(e);
+    } catch (e) {
+        const err = e as { stderr?: { toString(): string }; message?: string };
+        const errorMessage = err.stderr?.toString() || err.message || String(e);
         console.error("[ExecutionService] JavaScript execution failed:", errorMessage);
         
         return {
@@ -245,8 +251,20 @@ async function executeJudge0(code: string, language: string, stdin: string = "")
         };
 
         if (isRapidApi) {
-            headers["X-RapidAPI-Key"] = process.env.RAPIDAPI_KEY || "16726e4f4dmsh53eeca2383340c0p1f24dfjsnc4ecfdf6f9d5";
+            const rapidApiKey = process.env.RAPIDAPI_KEY;
+            if (!rapidApiKey) {
+                console.error("[ExecutionService] RapidAPI Judge0 selected but RAPIDAPI_KEY is not set");
+                return null;
+            }
+            headers["X-RapidAPI-Key"] = rapidApiKey;
             headers["X-RapidAPI-Host"] = judge0Url.replace("https://", "").split("/")[0];
+        } else {
+            // Self-hosted Judge0 (e.g. behind a Cloudflare tunnel) requires an auth token
+            // configured via AUTHN_HEADER/AUTHN_TOKEN in judge0.conf.
+            const judge0AuthToken = process.env.JUDGE0_AUTH_TOKEN;
+            if (judge0AuthToken) {
+                headers["X-Auth-Token"] = judge0AuthToken;
+            }
         }
 
         // Step 1: Submit code for execution
@@ -281,23 +299,33 @@ async function executeJudge0(code: string, language: string, stdin: string = "")
             };
         }
 
-        // Check for runtime errors / stderr
+        // Check for runtime errors / stderr.
+        // These can be genuine user-code errors OR sandbox/environment crashes
+        // (e.g. WSL2 runtimes failing to spawn), so mark retryable and let the
+        // chain try the next provider before giving up.
         if (result.stderr) {
             return {
                 success: false,
                 output: (result.stdout || "").trim(),
                 error: result.stderr,
                 language,
+                retryable: true,
             };
         }
 
-        // Check status code (3 = Accepted)
+        // Check status code (3 = Accepted). Internal/exec-format errors
+        // (8, 9, 10, 11, 12) mean the sandbox itself failed -> try next provider.
         if (result.status && result.status.id && result.status.id !== 3) {
+            if ([8, 9, 10, 11, 12].includes(result.status.id)) {
+                console.error("[ExecutionService] Judge0 internal error (status " + result.status.id + "), falling back");
+                return null;
+            }
             return {
                 success: false,
                 output: (result.stdout || "").trim(),
                 error: result.message || result.status.description || "Execution failed",
                 language,
+                retryable: true,
             };
         }
 
@@ -385,6 +413,7 @@ async function executeWandbox(code: string, language: string, stdin: string = ""
                 output: result.program_output || "",
                 error: result.program_error,
                 language,
+                retryable: true,
             };
         }
 
@@ -422,28 +451,49 @@ export async function executeCodeViaBackend(
         };
     }
 
-    let result: ExecutionResult | null = null;
+    // Best "failure" seen so far - returned only if every provider fails,
+    // so the user gets the most informative error instead of a generic one.
+    let bestFailure: ExecutionResult | null = null;
+
+    const considerFailure = (r: ExecutionResult) => {
+        if (!bestFailure || (r.retryable && !bestFailure.retryable)) {
+            bestFailure = r;
+        }
+    };
+
+    const tryProvider = (r: ExecutionResult | null): ExecutionResult | null => {
+        if (!r) return null; // provider unreachable -> try next
+        if (r.success) return r; // done
+        if (r.retryable) {
+            considerFailure(r);
+            return null; // environment-ish failure -> try next
+        }
+        return r; // definitive user-code failure (e.g. compile error) -> final
+    };
 
     // If a custom Judge0 URL is provided, prioritize it
     if (process.env.JUDGE0_URL) {
         console.log("[ExecutionService] Custom JUDGE0_URL detected. Trying Judge0 first...");
-        result = await executeJudge0(code, langKey, stdin);
-        if (result) return result;
+        const finalResult = tryProvider(await executeJudge0(code, langKey, stdin));
+        if (finalResult) return finalResult;
     }
 
-    // Try Wandbox first (PRIMARY) if no custom Judge0 is set
+    // Try Wandbox (primary remote provider)
     console.log("[ExecutionService] Trying Wandbox...");
-    result = await executeWandbox(code, langKey, stdin);
-    if (result) return result;
+    {
+        const finalResult = tryProvider(await executeWandbox(code, langKey, stdin));
+        if (finalResult) return finalResult;
+    }
 
-    // Fallback to native execution if Wandbox fails
-    console.log("[ExecutionService] Wandbox failed, trying native execution as fallback...");
+    // Fallback to native execution if remote providers fail
+    console.log("[ExecutionService] Trying native execution fallback...");
 
     // For JavaScript/TypeScript, use native Node.js execution
     if (langKey === "javascript" || langKey === "js" || langKey === "typescript") {
         console.log("[ExecutionService] Trying native JavaScript execution...");
         const nativeResult = await executeJavaScriptNative(code, stdin);
         if (nativeResult && nativeResult.success) return nativeResult;
+        if (nativeResult) considerFailure(nativeResult);
     }
 
     // For Python, try native execution
@@ -451,6 +501,7 @@ export async function executeCodeViaBackend(
         console.log("[ExecutionService] Trying native Python execution...");
         const nativeResult = await executePythonNative(code, stdin);
         if (nativeResult && nativeResult.success) return nativeResult;
+        if (nativeResult) considerFailure(nativeResult);
     }
 
     // For Java, try native execution
@@ -458,16 +509,21 @@ export async function executeCodeViaBackend(
         console.log("[ExecutionService] Trying native Java execution...");
         const nativeResult = await executeJavaNative(code, stdin);
         if (nativeResult && nativeResult.success) return nativeResult;
+        if (nativeResult) considerFailure(nativeResult);
     }
 
     // Try Judge0 as last fallback
     if (["python", "py", "javascript", "js", "typescript", "cpp", "c", "java"].includes(langKey)) {
         console.log("[ExecutionService] Trying Judge0 as last fallback...");
-        result = await executeJudge0(code, langKey, stdin);
-        if (result) return result;
+        const finalResult = tryProvider(await executeJudge0(code, langKey, stdin));
+        if (finalResult) return finalResult;
     }
 
-    // All services failed
+    // All services failed - return the most informative failure we saw
+    if (bestFailure) {
+        console.error("[ExecutionService] All execution services failed; returning best failure");
+        return bestFailure;
+    }
     console.error("[ExecutionService] All execution services failed");
     return {
         success: false,

@@ -1,13 +1,11 @@
 // Chat API Route - Personalized AI responses with user context from database
 
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { groq, AI_MODEL } from "@/lib/groq/client";
 import { ChatMessageSchema } from "@/types/api";
 import { createClient } from "@/lib/supabase/server";
-
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY!,
-});
+import { acquireAiSlot, rateLimit, LIMITS } from "@/lib/ai/limits";
+import { requestIdentifier, clientIp } from "@/lib/ai/identify";
 
 interface UserContext {
     name?: string;
@@ -192,6 +190,23 @@ Do not:
 
 export async function POST(request: NextRequest) {
     try {
+        // Rate limit + AI concurrency cap (protects the shared GPU server)
+        const identifier = await requestIdentifier(request).catch(() => `ip:${clientIp(request)}`);
+        const rl = rateLimit(identifier, LIMITS.AI_PER_MINUTE);
+        if (!rl.allowed) {
+            return new Response(
+                JSON.stringify({ error: "Too many messages - please wait a moment and try again." }),
+                { status: 429, headers: { "Content-Type": "application/json", "Retry-After": String(rl.retryAfterSec ?? 30) } }
+            );
+        }
+        const slot = acquireAiSlot();
+        if (!slot.acquired) {
+            return new Response(
+                JSON.stringify({ error: "The AI tutor is busy right now - please retry in a few seconds." }),
+                { status: 503, headers: { "Content-Type": "application/json", "Retry-After": "10" } }
+            );
+        }
+
         if (!process.env.GROQ_API_KEY) {
             console.error("GROQ_API_KEY is not configured");
             return new Response(
@@ -240,7 +255,7 @@ export async function POST(request: NextRequest) {
         messages.push({ role: "user", content: message });
 
         const stream = await groq.chat.completions.create({
-            model: "groq/compound-mini",
+            model: AI_MODEL,
             messages,
             stream: true,
             max_tokens: 4096,
@@ -263,6 +278,7 @@ export async function POST(request: NextRequest) {
                         }
                     }
                     controller.close();
+                    slot.release();
 
                     // Save chat history to database
                     if (user) {
@@ -328,7 +344,12 @@ export async function POST(request: NextRequest) {
                     }
                 } catch (error) {
                     controller.error(error);
+                    slot.release();
                 }
+            },
+            cancel() {
+                // client disconnected mid-stream - free the AI slot (idempotent)
+                slot.release();
             },
         });
 

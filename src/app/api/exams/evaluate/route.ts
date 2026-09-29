@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { groq, AI_MODEL } from "@/lib/groq/client";
 import { createClient } from "@/lib/supabase/server";
 import { executeCodeViaBackend } from "@/lib/backends/execution-service";
 import { wrapPythonCode, wrapJavaScriptCode, normalizeLanguage } from "@/lib/execution/executor";
 
 export const runtime = "nodejs";
 
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY!,
-});
 
 export async function POST(request: NextRequest) {
     try {
@@ -21,6 +18,9 @@ export async function POST(request: NextRequest) {
         const supabase = await createClient();
 
         // 1. Fetch Session and Test Info
+        // Loose typing at the Supabase boundary: the embedded query shape is
+        // validated by the checks below rather than by generated generics.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped embedded select
         const sb = supabase as any;
         const { data: sessionData, error: sessionError } = await sb.from("test_sessions").select("test_id, student_id, tests(generation_type)").eq("id", session_id).single();
 
@@ -40,8 +40,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Failed to fetch submissions" }, { status: 500 });
         }
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped embedded select
         const mcqs = submissions.filter((s: any) => s.test_questions.type === 'mcq');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped embedded select
         const fibs = submissions.filter((s: any) => s.test_questions.type === 'fill_in_blank');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped embedded select
         const coding = submissions.filter((s: any) => s.test_questions.type === 'coding');
 
         // Re-evaluate MCQs and FIBs securely on the backend
@@ -86,6 +89,7 @@ export async function POST(request: NextRequest) {
 
         // Execute coding questions securely against test cases
         for (const sub of coding) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped embedded select
             const codeSub = sub.code_submission as any;
             if (!codeSub || !codeSub.code) {
                 sub.score = 0;
@@ -114,11 +118,14 @@ export async function POST(request: NextRequest) {
         }
 
         const totalMcqs = mcqs.length;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped embedded select
         const mcqScore = mcqs.filter((s: any) => s.is_correct).length;
         
         const totalFibs = fibs.length;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped embedded select
         const fibScore = fibs.filter((s: any) => s.is_correct).length;
         
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped embedded select
         const codingSummary = coding.map((s: any) => ({
             id: s.id,
             title: s.test_questions.content.title,
@@ -158,7 +165,7 @@ Return strict JSON:
 }`;
 
         const completion = await groq.chat.completions.create({
-            model: "groq/compound-mini",
+            model: AI_MODEL,
             messages: [{ role: "user", content: prompt }],
             temperature: 0.2,
             response_format: { type: "json_object" },
@@ -182,7 +189,7 @@ Return strict JSON:
              const tcs = sub.test_questions.test_cases || [];
              totalCodingTestCases += tcs.length;
              
-             let aiPercentage = evaluation.coding_partial_scores?.[sub.id];
+             const aiPercentage = evaluation.coding_partial_scores?.[sub.id];
              
              // If AI didn't provide a score or it passed all cases natively, use native score
              if (aiPercentage === undefined || sub.score === tcs.length) {
@@ -225,8 +232,8 @@ Return strict JSON:
 
         return NextResponse.json(evaluation);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Evaluate Gen Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: error instanceof Error ? error.message : "Evaluation failed" }, { status: 500 });
     }
 }

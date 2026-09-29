@@ -1,7 +1,7 @@
 // Career Trends API Route - Enhanced with AI fallback for news
 
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { groq, AI_MODEL } from "@/lib/groq/client";
 import {
     searchCareerTrends,
     parseDemandLevel,
@@ -9,10 +9,8 @@ import {
     parseTopSkills,
     parseNewsArticles,
 } from "@/lib/tavily/client";
+import { acquireAiSlot } from "@/lib/ai/limits";
 
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY,
-});
 
 // Generate AI-based career insights when Tavily fails
 async function generateAICareerInsights(careerName: string) {
@@ -46,9 +44,13 @@ Return JSON with this exact structure:
 Include 4-5 realistic and current news items about this career field.
 Return ONLY valid JSON.`;
 
+    // Concurrency cap: when the AI is saturated, return null so callers
+    // use their existing static fallbacks instead of piling onto the GPU.
+    const slot = acquireAiSlot();
     try {
+        if (!slot.acquired) return null;
         const completion = await groq.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
+            model: AI_MODEL,
             messages: [
                 {
                     role: "system",
@@ -69,6 +71,8 @@ Return ONLY valid JSON.`;
     } catch (error) {
         console.error("AI insights generation error:", error);
         return null;
+    } finally {
+        if (slot.acquired) slot.release();
     }
 }
 

@@ -1,57 +1,108 @@
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { generateStructured, unwrapArray } from "@/lib/ai/structured";
+import { acquireAiSlot, rateLimit, LIMITS } from "@/lib/ai/limits";
+import { requestIdentifier, clientIp } from "@/lib/ai/identify";
+import { z } from "zod";
 
 export const runtime = "nodejs";
 
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY!,
+const questionSchema = z.object({
+    id: z.number().optional(),
+    question: z.string().min(1),
+    options: z.array(z.string()).min(2),
+    correctAnswer: z.string().optional(),
+    // some models emit snake_case despite instructions
+    correct_answer: z.string().optional(),
 });
 
+const questionsSchema = z.object({
+    questions: z.array(questionSchema).min(1),
+});
+// Models sometimes emit a bare array despite instructions - accept both shapes.
+const tolerantSchema = z.preprocess(
+    (v) => (Array.isArray(v) ? { questions: v } : v),
+    questionsSchema
+);
+
 export async function POST(request: NextRequest) {
+    const identifier = await requestIdentifier(request).catch(() => `ip:${clientIp(request)}`);
+    const rl = rateLimit(identifier, LIMITS.AI_PER_MINUTE);
+    if (!rl.allowed) {
+        return NextResponse.json(
+            { error: "Too many requests - please wait a moment and try again." },
+            { status: 429, headers: { "Retry-After": String(rl.retryAfterSec ?? 30) } }
+        );
+    }
+
+    const slot = acquireAiSlot();
+    if (!slot.acquired) {
+        return NextResponse.json(
+            { error: "The AI tutor is busy right now - please retry in a few seconds." },
+            { status: 503, headers: { "Retry-After": "10" } }
+        );
+    }
+
     try {
         const { career } = await request.json();
-
         if (!career) {
             return NextResponse.json({ error: "Career is required" }, { status: 400 });
         }
 
         const prompt = `Generate 5 technical interview questions to assess a candidate for a "${career}" role.
-        
-        Format the output strictly as a JSON array of objects with this structure:
-        [
-            {
-                "id": 1,
-                "question": "Question text here",
-                "options": ["Option A", "Option B", "Option C", "Option D"],
-                "correctAnswer": "Option A" // One of the options verbatim
-            }
-        ]
-        
-        Ensure questions cover key skills required for ${career} (e.g., for Software Engineer: specific languages, algorithms, system design).
-        Do not include any text outside the JSON array.`;
 
-        const completion = await groq.chat.completions.create({
-            model: "groq/compound-mini",
+Each item must have:
+- "question": the question text
+- "options": exactly 4 answer options
+- "correctAnswer": one of the options verbatim
+
+Cover key skills required for ${career} (e.g., for Software Engineer: specific languages, algorithms, system design).`;
+
+        const parsed = await generateStructured({
+            schema: tolerantSchema,
             messages: [{ role: "user", content: prompt }],
-            temperature: 0.7,
-            max_tokens: 2048,
+            temperature: 0.4,
+            maxTokens: 2048,
+            jsonSchema: {
+                type: "object",
+                properties: {
+                    questions: {
+                        type: "array",
+                        minItems: 5,
+                        maxItems: 5,
+                        items: {
+                            type: "object",
+                            properties: {
+                                id: { type: "integer" },
+                                question: { type: "string" },
+                                options: { type: "array", items: { type: "string" }, minItems: 4, maxItems: 4 },
+                                correctAnswer: { type: "string" },
+                            },
+                            required: ["question", "options", "correctAnswer"],
+                        },
+                    },
+                },
+                required: ["questions"],
+            },
         });
 
-        const content = completion.choices[0]?.message?.content || "[]";
+        const questions = parsed.questions.map((q, i) => ({
+            id: q.id ?? i + 1,
+            question: q.question,
+            options: q.options,
+            correctAnswer: q.correctAnswer ?? q.correct_answer ?? q.options[0],
+        }));
 
-        // Basic cleanup in case of markdown code blocks
-        const cleanedContent = content.replace(/```json/g, "").replace(/```/g, "").trim();
-
-        try {
-            const questions = JSON.parse(cleanedContent);
-            return NextResponse.json({ questions });
-        } catch (parseError) {
-            console.error("Failed to parse Groq response:", content);
-            return NextResponse.json({ error: "Failed to generate valid questions" }, { status: 500 });
-        }
-
-    } catch (error: any) {
-        console.error("Quiz generation error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ questions });
+    } catch (error: unknown) {
+        console.error(
+            "Quiz generation error:",
+            error instanceof Error ? error.message : error
+        );
+        return NextResponse.json(
+            { error: "Failed to generate valid questions - please try again." },
+            { status: 502 }
+        );
+    } finally {
+        slot.release();
     }
 }

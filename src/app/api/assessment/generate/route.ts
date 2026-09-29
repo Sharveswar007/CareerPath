@@ -2,14 +2,11 @@
 // Generates personalized assessment questions based on user's target career
 
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { groq, AI_MODEL } from "@/lib/groq/client";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY!,
-});
 
 interface GeneratedQuestion {
     id: string;
@@ -300,7 +297,7 @@ async function callGroq(prompt: string, maxTokens: number, timeoutMs: number, ma
         try {
             const response = await Promise.race([
                 groq.chat.completions.create({
-                    model: "groq/compound-mini",
+                    model: AI_MODEL,
                     messages: [
                         {
                             role: "system",
@@ -319,8 +316,8 @@ async function callGroq(prompt: string, maxTokens: number, timeoutMs: number, ma
             ]);
 
             return response.choices[0]?.message?.content || "{}";
-        } catch (error: any) {
-            console.error(`Groq API error (attempt ${attempt + 1}/${maxRetries}):`, error.message);
+        } catch (error: unknown) {
+            console.error(`Groq API error (attempt ${attempt + 1}/${maxRetries}):`, error instanceof Error ? error.message : error);
             if (attempt === maxRetries - 1) {
                 throw error;
             }

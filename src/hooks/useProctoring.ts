@@ -58,10 +58,11 @@ export function useProctoring({ onViolation, maxViolations = 3, enabled = true }
                 return true;
             }
             return false;
-        } catch (err: any) {
+        } catch (err) {
             console.error("Proctoring setup failed:", err);
             // Don't trigger a violation for failing to start, just prevent them from starting
-            if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
+            const errName = err instanceof Error ? err.name : "";
+            if (errName === 'NotAllowedError' || errName === 'NotFoundError') {
                  toast.error("Camera and Microphone permissions are required to start the exam.");
             } else {
                  toast.error("Failed to enter fullscreen or access media devices.");

@@ -29,7 +29,7 @@ export function isLanguageSupported(lang: string): lang is SupportedLanguage {
 }
 
 // For compatibility
-export function isBrowserLanguage(lang: string): boolean {
+export function isBrowserLanguage(_lang: string): boolean {
     return false; // All execution via backend API
 }
 
@@ -105,10 +105,11 @@ export async function executeCode(
             language: normalizedLang,
             executionTime: performance.now() - startTime,
         };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("[Executor] Error:", error);
+        const errName = error instanceof Error ? error.name : "";
 
-        if (error.name === "AbortError") {
+        if (errName === "AbortError") {
             return {
                 success: false,
                 output: "",
@@ -121,7 +122,7 @@ export async function executeCode(
         return {
             success: false,
             output: "",
-            error: error.message || "Failed to execute code",
+            error: error instanceof Error ? error.message : "Failed to execute code",
             language: normalizedLang,
             executionTime: performance.now() - startTime,
         };

@@ -251,7 +251,7 @@ export default function TestSessionPage() {
         const visibleTestCases = question.test_cases?.filter((tc: any) => !tc.is_hidden) || [];
         
         let passed = 0;
-        let results = [];
+        const results: Array<{ input?: string; expected: string; actual: string; passed: boolean; error?: string | null }> = [];
 
         toast.info(`Running ${lang} code against visible test cases...`);
 

@@ -239,7 +239,6 @@ export default function ChallengeDetailPage() {
             return;
         }
 
-        // @ts-ignore
         setCode(getStarterCode(challengeData, language));
     }, [language, challengeData]);
 

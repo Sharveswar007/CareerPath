@@ -90,6 +90,9 @@ export function BubbleAnimation({
         const container = containerRef.current;
         if (!container) return;
 
+        // Named inner step keeps the rAF recursion without referencing
+        // animateBubbles before it is declared.
+        const step = () => {
         bubblesRef.current.forEach((bubble) => {
             // Update position
             bubble.y -= bubble.speedY;
@@ -118,8 +121,9 @@ export function BubbleAnimation({
                 y: bubble.y,
             });
         });
-
-        animationRef.current = requestAnimationFrame(animateBubbles);
+        };
+        step();
+        animationRef.current = requestAnimationFrame(step);
     }, []);
 
     useEffect(() => {

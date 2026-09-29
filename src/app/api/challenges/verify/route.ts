@@ -24,7 +24,6 @@ interface VerifyRequest {
     code: string;
     language: string;
     test_cases: TestCase[];
-    challenge_title?: string;
 }
 
 // Normalize output for comparison - handles various edge cases
@@ -69,7 +68,7 @@ function outputsMatch(actual: string, expected: string): boolean {
 export async function POST(request: NextRequest) {
     try {
         const body: VerifyRequest = await request.json();
-        const { code, language, test_cases, challenge_title } = body;
+        const { code, language, test_cases } = body;
 
         // Validate input
         if (!code || code.trim().length === 0) {
@@ -165,14 +164,15 @@ export async function POST(request: NextRequest) {
                     error: passed ? undefined : "Wrong answer",
                 });
 
-            } catch (err: any) {
+            } catch (err) {
+                const errMsg = err instanceof Error ? err.message : "Test execution failed";
                 results.push({
                     test: i + 1,
                     input: testInput.substring(0, 50),
                     expected: expectedOutput.substring(0, 50),
                     actual: "",
                     passed: false,
-                    error: err.message || "Test execution failed",
+                    error: errMsg,
                 });
             }
         }
@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
             feedback,
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Verification Error:", error);
 
         return NextResponse.json({
@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
             total: 0,
             passed_count: 0,
             results: [],
-            feedback: "Error verifying code: " + (error.message || "Unknown error"),
+            feedback: "Error verifying code: " + (error instanceof Error ? error.message : "Unknown error"),
         });
     }
 }

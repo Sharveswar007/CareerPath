@@ -17,6 +17,7 @@ export function executeJavaScript(code: string, testInput: string = ""): Executi
 
     try {
         // Parse the test input as JSON
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- arbitrary user JSON
         let parsedInput: any;
         try {
             parsedInput = JSON.parse(testInput.trim());
@@ -26,6 +27,7 @@ export function executeJavaScript(code: string, testInput: string = ""): Executi
 
         const logs: string[] = [];
         const mockConsole = {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- console args are intentionally untyped
             log: (...args: any[]) => {
                 logs.push(args.map(a =>
                     typeof a === 'object' ? JSON.stringify(a) : String(a)
@@ -74,8 +76,8 @@ export function executeJavaScript(code: string, testInput: string = ""): Executi
             output = logs[logs.length - 1];
         }
 
-    } catch (e: any) {
-        error = e.message || "JavaScript execution error";
+    } catch (e) {
+        error = e instanceof Error ? e.message : "JavaScript execution error";
     }
 
     return {
@@ -88,9 +90,12 @@ export function executeJavaScript(code: string, testInput: string = ""): Executi
 }
 
 // Pyodide instance cache
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped CDN global
 let pyodideInstance: any = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped CDN global
 let pyodideLoading: Promise<any> | null = null;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped CDN global
 async function loadPyodide(): Promise<any> {
     if (pyodideInstance) return pyodideInstance;
     if (pyodideLoading) return pyodideLoading;
@@ -105,7 +110,7 @@ async function loadPyodide(): Promise<any> {
             document.head.appendChild(script);
         });
 
-        // @ts-ignore
+        // @ts-expect-error loadPyodide is injected by the pyodide CDN script
         pyodideInstance = await window.loadPyodide({
             indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/",
         });
@@ -190,8 +195,8 @@ _final
 
         output = pyodide.runPython(fullCode);
 
-    } catch (e: any) {
-        error = e.message || "Python execution error";
+    } catch (e) {
+        error = e instanceof Error ? e.message : "Python execution error";
         if (error && error.includes("PythonError:")) {
             error = error.split("PythonError:")[1]?.trim() || error;
         }

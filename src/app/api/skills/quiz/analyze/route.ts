@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { groq, AI_MODEL } from "@/lib/groq/client";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY!,
-});
 
 function normalizeText(value: string): string {
     return value.trim().toLowerCase();
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI-generated quiz payload
 function resolveAnswerValue(question: any, value: unknown): string {
     const options = Array.isArray(question.options)
         ? question.options.filter((opt: unknown): opt is string => typeof opt === "string")
@@ -51,6 +49,7 @@ export async function POST(request: NextRequest) {
         let correctCount = 0;
         const total = questions.length;
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI-generated quiz payload
         questions.forEach((q: any) => {
             const normalizedUserAnswer = resolveAnswerValue(q, answers[q.id]);
             const normalizedCorrectAnswer = resolveAnswerValue(q, q.correctAnswer);
@@ -69,7 +68,7 @@ export async function POST(request: NextRequest) {
         const prompt = `Analyze these quiz results for a "${career}" candidate.
         Score: ${scorePercentage}% (${correctCount}/${total}).
         Questions & User Answers:
-        ${questions.map((q: any) => `- Q: ${q.question}\n  User Answer: ${answers[q.id]}\n  Correct: ${q.correctAnswer}`).join("\n")}
+        ${questions.map((q: { id?: string | number; question?: string; correctAnswer?: string }) => `- Q: ${q.question}\n  User Answer: ${answers[String(q.id)]}\n  Correct: ${q.correctAnswer}`).join("\n")}
 
         Provide a structured JSON response with:
         1. "gap_analysis": A summary of weak areas.
@@ -104,7 +103,7 @@ export async function POST(request: NextRequest) {
         }`;
 
         const completion = await groq.chat.completions.create({
-            model: "groq/compound-mini",
+            model: AI_MODEL,
             messages: [{ role: "user", content: prompt }],
             temperature: 0.7,
             max_tokens: 2048,
@@ -112,6 +111,7 @@ export async function POST(request: NextRequest) {
         });
 
         const content = completion.choices[0]?.message?.content || "{}";
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI JSON payload, shape validated at usage sites
         let analysis: any = {};
 
         try {
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
             const jsonMatch = content.match(/\{[\s\S]*\}/);
             const jsonString = jsonMatch ? jsonMatch[0] : content;
             analysis = JSON.parse(jsonString);
-        } catch (e) {
+        } catch {
             console.error("JSON Parse Error for Analysis:", content);
             // Fallback with correct schema
             analysis = {
@@ -165,6 +165,7 @@ export async function POST(request: NextRequest) {
 
             if (user) {
                 // Save Skills Gap Analysis
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped insert payload
                 await (supabase.from("skills_gap_analysis") as any).insert({
                     user_id: user.id,
                     session_id: "current",
@@ -181,8 +182,8 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(finalResult);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Quiz analysis error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: error instanceof Error ? error.message : "Quiz analysis failed" }, { status: 500 });
     }
 }

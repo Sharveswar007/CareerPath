@@ -1,11 +1,8 @@
 // Exam Updates API - AI-Generated exam timeline and notifications
 
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { groq, AI_MODEL } from "@/lib/groq/client";
 
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY!,
-});
 
 interface ExamUpdate {
     date: string;
@@ -25,7 +22,6 @@ export async function POST(request: NextRequest) {
         // Get current date for realistic timeline
         const currentDate = new Date();
         const currentYear = currentDate.getFullYear();
-        const currentMonth = currentDate.getMonth() + 1;
 
         const prompt = `Generate a realistic exam timeline for "${examFullName}" (${examName}) conducted by ${conductingBody}.
 
@@ -54,7 +50,7 @@ Make dates realistic based on typical ${examName} patterns.
 Return ONLY valid JSON array, no markdown.`;
 
         const response = await groq.chat.completions.create({
-            model: "groq/compound-mini",
+            model: AI_MODEL,
             messages: [
                 {
                     role: "system",

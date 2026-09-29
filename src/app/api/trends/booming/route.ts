@@ -2,15 +2,19 @@
 // Uses AI to provide current market trends personalized to user's industry
 
 import { NextRequest, NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { groq, AI_MODEL } from "@/lib/groq/client";
 import { createClient } from "@/lib/supabase/server";
-
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY,
-});
+import { acquireAiSlot, rateLimit, LIMITS } from "@/lib/ai/limits";
+import { requestIdentifier, clientIp } from "@/lib/ai/identify";
 
 export async function GET(request: NextRequest) {
     try {
+        // Rate limit; if the AI is rate-limited/busy, fall back to static data
+        const identifier = await requestIdentifier(request).catch(() => `ip:${clientIp(request)}`);
+        const rl = rateLimit(identifier, LIMITS.AI_PER_MINUTE);
+        const slot = acquireAiSlot();
+        const aiUnavailable = !rl.allowed || !slot.acquired;
+
         const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
 
@@ -73,6 +77,7 @@ Return ONLY the JSON array, no other text.`;
         let content = "[]";
 
         try {
+            if (aiUnavailable) throw new Error("ai-unavailable");
             const completion = await groq.chat.completions.create({
                 messages: [
                     {
@@ -84,7 +89,7 @@ Return ONLY the JSON array, no other text.`;
                         content: prompt,
                     },
                 ],
-                model: "llama-3.3-70b-versatile",
+                model: AI_MODEL,
                 temperature: 0.7,
                 max_tokens: 1000,
             });
@@ -136,11 +141,13 @@ Return ONLY the JSON array, no other text.`;
                 };
             });
 
+            if (slot.acquired) slot.release();
             return NextResponse.json({
                 field: userField,
                 careers: enrichedCareers,
             });
         } catch {
+            if (slot.acquired) slot.release();
             // Fallback careers
             return NextResponse.json({
                 field: userField,

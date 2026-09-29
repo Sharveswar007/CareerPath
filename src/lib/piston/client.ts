@@ -97,7 +97,7 @@ export async function executeCode(
         let result;
         try {
             result = JSON.parse(responseText);
-        } catch (e) {
+        } catch {
             console.error("[Wandbox] Failed to parse JSON:", responseText);
             return {
                 success: false,

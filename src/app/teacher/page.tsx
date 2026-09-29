@@ -313,7 +313,7 @@ export default function TeacherDashboard() {
         try {
             const supabase = createClient();
             const code = generateRandomCode();
-            let title = `Skill Categorization Assessment (${difficulty})`;
+            const title = `Skill Categorization Assessment (${difficulty})`;
 
             const sb = supabase as any;
             const { data: testData, error: insertError } = await sb.from('tests')
@@ -1067,7 +1067,7 @@ export default function TeacherDashboard() {
                                                 </div>
                                                 
                                                 <div className="bg-background p-3 rounded-lg border border-border text-sm font-mono overflow-x-auto">
-                                                    <span className="text-muted-foreground text-xs block mb-1">Student's Answer:</span>
+                                                    <span className="text-muted-foreground text-xs block mb-1">Student&apos;s Answer:</span>
                                                     {isCode ? (
                                                         <pre className="text-violet-300">{sub.code_submission?.code || sub.student_answer || "No code submitted"}</pre>
                                                     ) : (

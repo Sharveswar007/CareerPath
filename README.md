@@ -2,7 +2,7 @@
 
 CareerPath is a full-stack AI-enabled career development platform for students. It combines onboarding, personalized assessment, skills-gap analysis, coding challenge practice, resume analysis, exam updates, and career trend insights in one application.
 
-The project is built with Next.js App Router, Supabase (database and auth), and Groq for AI-powered workflows.
+The project is built with Next.js App Router, Supabase (database and auth), and an OpenAI-compatible AI endpoint - either Groq cloud or a self-hosted vLLM server (see the `server/` kit) with no code changes between them.
 
 ## Table of Contents
 
@@ -94,7 +94,7 @@ CareerPath provides an integrated workflow for student career progression:
 
 ### AI and External Services
 
-- Groq API (LLM workflows)
+- Groq API or self-hosted vLLM (LLM workflows, OpenAI-compatible; switch via `AI_BASE_URL`)
 - OCR.space API (optional OCR path for resume extraction)
 - Tavily API (optional trend/search enrichment)
 - Multi-backend challenge execution flow (Wandbox-first execution with additional fallbacks configured in backend service)
@@ -175,6 +175,10 @@ Current route handlers under `src/app/api/**/route.ts`:
 
 - `POST /api/chat`
 
+### Ops
+
+- `GET /api/health` - liveness + dependency status (Supabase / AI / Judge0); returns 200 or 502
+
 ### Trends
 
 - `GET /api/trends/[career]`
@@ -182,7 +186,7 @@ Current route handlers under `src/app/api/**/route.ts`:
 
 ### Exams
 
-- `GET /api/exams/updates`
+- `POST /api/exams/updates`
 
 ## Data Model
 
@@ -236,6 +240,11 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 GROQ_API_KEY=
 TAVILY_API_KEY=
 OCR_SPACE_API_KEY=
+# Self-hosted AI (vLLM) and Judge0 - see server/README.md:
+AI_BASE_URL=
+AI_MODEL=
+JUDGE0_URL=
+JUDGE0_AUTH_TOKEN=
 ```
 
 Required in most environments:
@@ -267,6 +276,7 @@ npm run dev
 npm run build
 npm run start
 npm run lint
+npm test          # unit tests (vitest)
 ```
 
 ## Deployment Notes
@@ -408,6 +418,11 @@ See [`DEPLOY.md`](./DEPLOY.md) for detailed deployment instructions.
 | Database Operations | CRUD with RLS policies | ✅ Passed |
 | Responsive Design | Mobile, tablet, desktop | ✅ Passed |
 | Cross-Browser | Chrome, Firefox, Edge, Safari | ✅ Passed |
+
+Full end-to-end test evidence (local Judge0 + Supabase + vLLM stack, all API
+routes, bugs found and fixed): see [TESTING_REPORT.md](./TESTING_REPORT.md).
+Concurrency load testing (65 users) runs on the GPU server via
+`server/load-test.ps1` - see [server/README.md](./server/README.md).
 
 ### Performance Metrics
 - 🎯 Lighthouse Score: 90+

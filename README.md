@@ -416,6 +416,9 @@ See [`DEPLOY.md`](./DEPLOY.md) for detailed deployment instructions.
 | Code Execution | JS, Python, Java, C++ | ✅ Passed |
 | Resume PDF Parsing | Text extraction + AI analysis | ✅ Passed |
 | Database Operations | CRUD with RLS policies | ✅ Passed |
+| Account Self-Deletion | `/privacy` → password-confirmed wipe (verified in DB) | ✅ Passed |
+| AI Reliability | Rate limit 10/min/user, concurrency cap 8, structured-JSON retry | ✅ Passed |
+| Health Endpoint | `/api/health` checks Supabase + AI + Judge0 | ✅ Passed |
 | Responsive Design | Mobile, tablet, desktop | ✅ Passed |
 | Cross-Browser | Chrome, Firefox, Edge, Safari | ✅ Passed |
 
@@ -423,6 +426,13 @@ Full end-to-end test evidence (local Judge0 + Supabase + vLLM stack, all API
 routes, bugs found and fixed): see [TESTING_REPORT.md](./TESTING_REPORT.md).
 Concurrency load testing (65 users) runs on the GPU server via
 `server/load-test.ps1` - see [server/README.md](./server/README.md).
+
+### Operations
+
+- 🚨 **Something broke?** → [RUNBOOK.md](./RUNBOOK.md) — 60-second fallbacks,
+  daily checks, diagnosis map, weekly maintenance, demo-day checklist
+- 🛠️ **Server setup** → [server/README.md](./server/README.md) — layman steps 1–9
+- ✅ **What's left** → [PENDING_TASKS.md](./PENDING_TASKS.md)
 
 ### Performance Metrics
 - 🎯 Lighthouse Score: 90+

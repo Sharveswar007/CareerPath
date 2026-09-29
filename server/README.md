@@ -139,11 +139,14 @@ AI_MODEL=careerpath-ai
 GROQ_API_KEY=dummy_not_used
 JUDGE0_URL=https://<judge0-tunnel-url>
 JUDGE0_AUTH_TOKEN=7e37040d8cc7bc9cba642dd84667aeac3b6248456b95e0f5
+SUPABASE_SERVICE_ROLE_KEY=<service_role key from supabase .env (line SERVICE_ROLE_KEY)>
 ```
 Both secrets must match their server-side values:
 `AI_API_KEY` = the `-ApiKey` used in `start-vllm.ps1`, and `JUDGE0_AUTH_TOKEN`
 = `AUTHN_TOKEN` in `server\judge0\judge0.conf`. The defaults above already
 do, so you can copy-paste this block as-is.
+`SUPABASE_SERVICE_ROLE_KEY` is SERVER-ONLY (bypasses all database security);
+it enables the self-service account deletion on `/privacy`.
 Then Deployments -> Redeploy.
 
 Also in Supabase Studio -> Authentication -> URL Configuration:
@@ -173,6 +176,22 @@ what matters is the PASS/FAIL verdict at the end.
 Optional: test through the real internet instead of localhost:
 `-Target https://your-vercel-url`
 
+## Step 9 - Accuracy check, backups, demo accounts
+
+Run these once before demo week (details in the root `RUNBOOK.md`):
+
+```powershell
+# 1. AI structural accuracy (want >= 80%)
+powershell -ExecutionPolicy Bypass -File server\golden-set.ps1
+
+# 2. Database backup + verify it restores (one-time drill, then weekly)
+powershell -ExecutionPolicy Bypass -File server\backup-db.ps1
+powershell -ExecutionPolicy Bypass -File server\backup-db.ps1 -Restore -File server\backups\<latest>.sql
+
+# 3. Ready-to-demo student accounts (printed password works for all 3)
+powershell -ExecutionPolicy Bypass -File server\create-demo-accounts.ps1
+```
+
 ## Daily ops
 
 | Task | Command |
@@ -184,6 +203,8 @@ Optional: test through the real internet instead of localhost:
 | Supabase logs | `cd server\supabase\docker; docker compose logs -f` |
 | Print tunnel URLs | `powershell -File server\tunnel\get-tunnel-urls.ps1` |
 | Load test (65 users) | `powershell -File server\load-test.ps1 -Users 65` |
+| Health check | `curl https://<vercel-url>/api/health` |
+| DB backup | `powershell -File server\backup-db.ps1` |
 | Restart AI | `docker restart vllm` |
 | Start everything | `powershell -File server\start-all.ps1` |
 | Stop everything | `powershell -File server\stop-all.ps1` |

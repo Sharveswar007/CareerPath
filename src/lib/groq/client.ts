@@ -33,6 +33,8 @@ export const groq = new Groq({
     apiKey: process.env.AI_API_KEY || process.env.GROQ_API_KEY || "not-needed",
     baseURL: AI_BASE_URL || undefined,
     fetch: adaptedFetch,
-    timeout: 120_000,
+    // Abort hung requests so a stuck model call can't hold a route forever.
+    // Override with AI_TIMEOUT_MS (e.g. 60000 for the faster 8B test model).
+    timeout: Number(process.env.AI_TIMEOUT_MS) || 120_000,
     maxRetries: 2,
 });

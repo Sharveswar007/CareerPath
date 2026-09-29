@@ -42,3 +42,6 @@ next-env.d.ts
 
 	eacher portel/
 lint-log.tmp.txt
+
+# local database backups (never commit)
+server/backups/

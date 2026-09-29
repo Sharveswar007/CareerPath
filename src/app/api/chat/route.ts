@@ -6,6 +6,7 @@ import { ChatMessageSchema } from "@/types/api";
 import { createClient } from "@/lib/supabase/server";
 import { acquireAiSlot, rateLimit, LIMITS } from "@/lib/ai/limits";
 import { requestIdentifier, clientIp } from "@/lib/ai/identify";
+import { newRequestId, logError } from "@/lib/obs/request-id";
 
 interface UserContext {
     name?: string;
@@ -189,6 +190,7 @@ Do not:
 }
 
 export async function POST(request: NextRequest) {
+    const requestId = newRequestId();
     try {
         // Rate limit + AI concurrency cap (protects the shared GPU server)
         const identifier = await requestIdentifier(request).catch(() => `ip:${clientIp(request)}`);
@@ -208,7 +210,7 @@ export async function POST(request: NextRequest) {
         }
 
         if (!process.env.GROQ_API_KEY) {
-            console.error("GROQ_API_KEY is not configured");
+            logError(requestId, "chat.no_api_key", new Error("GROQ_API_KEY missing"));
             return new Response(
                 JSON.stringify({ error: "GROQ_API_KEY not configured" }),
                 { status: 500, headers: { "Content-Type": "application/json" } }
@@ -361,7 +363,7 @@ export async function POST(request: NextRequest) {
             },
         });
     } catch (error: unknown) {
-        console.error("Chat API error:", error);
+        logError(requestId, "chat.api_error", error);
         return NextResponse.json({
             error: "Internal server error",
             message: error instanceof Error ? error.message : "Unknown error",

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateStructured, unwrapArray } from "@/lib/ai/structured";
+import { generateStructured } from "@/lib/ai/structured";
 import { acquireAiSlot, rateLimit, LIMITS } from "@/lib/ai/limits";
 import { requestIdentifier, clientIp } from "@/lib/ai/identify";
+import { dedupeQuestions } from "@/lib/ai/dedupe";
+import { newRequestId, logError } from "@/lib/obs/request-id";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -25,6 +27,7 @@ const tolerantSchema = z.preprocess(
 );
 
 export async function POST(request: NextRequest) {
+    const requestId = newRequestId();
     const identifier = await requestIdentifier(request).catch(() => `ip:${clientIp(request)}`);
     const rl = rateLimit(identifier, LIMITS.AI_PER_MINUTE);
     if (!rl.allowed) {
@@ -92,12 +95,12 @@ Cover key skills required for ${career} (e.g., for Software Engineer: specific l
             correctAnswer: q.correctAnswer ?? q.correct_answer ?? q.options[0],
         }));
 
-        return NextResponse.json({ questions });
+        // drop repeated / degenerate questions (small models repeat themselves)
+        const unique = dedupeQuestions(questions);
+
+        return NextResponse.json({ questions: unique.length > 0 ? unique : questions });
     } catch (error: unknown) {
-        console.error(
-            "Quiz generation error:",
-            error instanceof Error ? error.message : error
-        );
+        logError(requestId, "quiz.generate_failed", error);
         return NextResponse.json(
             { error: "Failed to generate valid questions - please try again." },
             { status: 502 }

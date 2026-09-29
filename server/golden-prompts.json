@@ -1,0 +1,77 @@
+{
+  "comment": "Golden-set evaluation prompts. Run with server/golden-set.ps1 after vLLM is up. Each category checks that the model returns parseable JSON in the shape the app expects. This measures STRUCTURAL accuracy (JSON validity + required fields) - spot-check factual quality manually.",
+  "categories": [
+    {
+      "name": "quiz_generation",
+      "appRoute": "/api/skills/quiz/generate",
+      "system": "You are a technical interviewer. Return ONLY valid JSON.",
+      "prompts": [
+        "Generate 5 technical interview questions to assess a candidate for a \"Software Engineer\" role. Each item must have \"question\", \"options\" (exactly 4), and \"correctAnswer\" (one of the options verbatim). Return a JSON object: {\"questions\": [...]}.",
+        "Generate 5 technical interview questions to assess a candidate for a \"Data Analyst\" role. Each item must have \"question\", \"options\" (exactly 4), and \"correctAnswer\". Return a JSON object: {\"questions\": [...]}.",
+        "Generate 5 technical interview questions for a \"Full Stack Developer\" role. Each item must have \"question\", \"options\" (exactly 4), and \"correctAnswer\". Return {\"questions\": [...]}.",
+        "Generate 5 technical interview questions for a \"Machine Learning Engineer\" role. Each item must have \"question\", \"options\" (exactly 4), and \"correctAnswer\". Return {\"questions\": [...]}.",
+        "Generate 5 technical interview questions for a \"Cloud Engineer\" role. Each item must have \"question\", \"options\" (exactly 4), and \"correctAnswer\". Return {\"questions\": [...]}."
+      ],
+      "validate": {
+        "type": "object",
+        "requiredKey": "questions",
+        "minItems": 3,
+        "itemKeys": ["question", "options"]
+      }
+    },
+    {
+      "name": "assessment",
+      "appRoute": "/api/assessment/generate",
+      "system": "You are a career assessment designer. Return ONLY valid JSON.",
+      "prompts": [
+        "Generate 5 multiple-choice career assessment questions for a student interested in \"Software Engineering\". Each item: \"question\", \"options\" (exactly 4), \"correctAnswer\". Return {\"questions\": [...]}.",
+        "Generate 5 multiple-choice career assessment questions for a student interested in \"UI/UX Design\". Each item: \"question\", \"options\" (exactly 4), \"correctAnswer\". Return {\"questions\": [...]}.",
+        "Generate 5 multiple-choice questions measuring aptitude for \"Cybersecurity\". Each item: \"question\", \"options\" (exactly 4), \"correctAnswer\". Return {\"questions\": [...]}.",
+        "Generate 5 multiple-choice interest questions for someone considering \"Product Management\". Each item: \"question\", \"options\" (exactly 4), \"correctAnswer\". Return {\"questions\": [...]}.",
+        "Generate 5 multiple-choice questions assessing readiness for \"DevOps\". Each item: \"question\", \"options\" (exactly 4), \"correctAnswer\". Return {\"questions\": [...]}."
+      ],
+      "validate": {
+        "type": "object",
+        "requiredKey": "questions",
+        "minItems": 3,
+        "itemKeys": ["question", "options"]
+      }
+    },
+    {
+      "name": "exam_generation",
+      "appRoute": "/api/exams/generate",
+      "system": "You are an exam paper generator. Return ONLY valid JSON.",
+      "prompts": [
+        "Create a coding test with 3 MCQs on Python fundamentals. Return a JSON object: {\"mcqs\": [{\"question\": \"...\", \"options\": [\"...\"], \"correct_answer\": \"...\"}]} with exactly 3 mcqs.",
+        "Create a coding test with 3 MCQs on JavaScript basics. Return {\"mcqs\": [{\"question\": \"...\", \"options\": [\"...\"], \"correct_answer\": \"...\"}]} with exactly 3 mcqs.",
+        "Create a coding test with 3 MCQs on SQL and databases. Return {\"mcqs\": [{\"question\": \"...\", \"options\": [\"...\"], \"correct_answer\": \"...\"}]} with exactly 3 mcqs.",
+        "Create a coding test with 3 MCQs on data structures. Return {\"mcqs\": [{\"question\": \"...\", \"options\": [\"...\"], \"correct_answer\": \"...\"}]} with exactly 3 mcqs.",
+        "Create a coding test with 3 MCQs on object-oriented programming. Return {\"mcqs\": [{\"question\": \"...\", \"options\": [\"...\"], \"correct_answer\": \"...\"}]} with exactly 3 mcqs."
+      ],
+      "validate": {
+        "type": "object",
+        "requiredKey": "mcqs",
+        "minItems": 3,
+        "itemKeys": ["question", "options"]
+      }
+    },
+    {
+      "name": "chat",
+      "appRoute": "/api/chat (non-streaming check)",
+      "system": "You are a helpful career counselor for college students.",
+      "prompts": [
+        "I am a 2nd year CSE student unsure between backend development and data science. Ask me 3 questions to help me decide. Answer in JSON: {\"questions\": [\"...\", \"...\", \"...\"]}.",
+        "What skills should a student learn in their 2nd year to be employable by graduation? Answer in JSON: {\"advice\": \"...\", \"skills\": [\"...\"]}.",
+        "Compare working as a frontend developer versus a backend developer for a fresher. Answer in JSON: {\"comparison\": \"...\"}.",
+        "Suggest a 6-month learning plan for web development basics. Answer in JSON: {\"plan\": \"...\"}.",
+        "How do I prepare for my first internship interview in 30 days? Answer in JSON: {\"plan\": \"...\"}."
+      ],
+      "validate": {
+        "type": "object",
+        "requiredKey": null,
+        "minItems": 0,
+        "itemKeys": []
+      }
+    }
+  ]
+}

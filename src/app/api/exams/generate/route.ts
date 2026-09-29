@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateStructured } from "@/lib/ai/structured";
 import { acquireAiSlot, rateLimit, LIMITS } from "@/lib/ai/limits";
 import { requestIdentifier, clientIp } from "@/lib/ai/identify";
+import { dedupeQuestions } from "@/lib/ai/dedupe";
+import { newRequestId, logError } from "@/lib/obs/request-id";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
@@ -30,6 +32,7 @@ const testSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+    const requestId = newRequestId();
     const identifier = await requestIdentifier(request).catch(() => `ip:${clientIp(request)}`);
     const rl = rateLimit(identifier, LIMITS.AI_PER_MINUTE);
     if (!rl.allowed) {
@@ -143,6 +146,9 @@ Return a JSON object with keys "mcqs", "fill_in_blanks", "coding_questions".`;
             answer: { correct_answer: q.correct_answer }
         }));
 
+        // drop repeated / degenerate MCQs (small models repeat themselves)
+        generatedTest.mcqs = dedupeQuestions(generatedTest.mcqs);
+
         // Map and insert Fill in Blanks
         const fibInserts = generatedTest.fill_in_blanks.map((q) => ({
             test_id,
@@ -170,14 +176,14 @@ Return a JSON object with keys "mcqs", "fill_in_blanks", "coding_questions".`;
         const { error } = await sb.from("test_questions").insert(allQuestions);
 
         if (error) {
-            console.error("DB Insert Error:", error);
+            logError(requestId, "exams.db_insert_failed", error);
             return NextResponse.json({ error: `Database Error: ${error.message}` }, { status: 500 });
         }
 
         return NextResponse.json({ success: true, count: allQuestions.length });
 
     } catch (error: unknown) {
-        console.error("Test Gen Error:", error instanceof Error ? error.message : error);
+        logError(requestId, "exams.generate_failed", error instanceof Error ? error : new Error(String(error)));
         return NextResponse.json({ error: "Failed to generate the test - please try again." }, { status: 502 });
     } finally {
         slot.release();

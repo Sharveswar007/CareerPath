@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateStructured } from "@/lib/ai/structured";
 import { acquireAiSlot, rateLimit, LIMITS } from "@/lib/ai/limits";
 import { requestIdentifier, clientIp } from "@/lib/ai/identify";
+import { newRequestId, logError } from "@/lib/obs/request-id";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 import { z } from "zod";
@@ -23,6 +24,7 @@ const challengeSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+    const requestId = newRequestId();
     const identifier = await requestIdentifier(request).catch(() => `ip:${clientIp(request)}`);
     const rl = rateLimit(identifier, LIMITS.AI_PER_MINUTE);
     if (!rl.allowed) {
@@ -132,7 +134,7 @@ Return a JSON object with:
         return NextResponse.json(savedChallenge || challenge);
 
     } catch (error: unknown) {
-        console.error("Challenge Gen Error:", error instanceof Error ? error.message : error);
+        logError(requestId, "challenges.generate_failed", error instanceof Error ? error : new Error(String(error)));
         return NextResponse.json(
             { error: "Failed to generate a valid challenge - please try again." },
             { status: 502 }

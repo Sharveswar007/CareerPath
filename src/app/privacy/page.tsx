@@ -1,9 +1,8 @@
-import Link from "next/link";
+"use client";
 
-export const metadata = {
-    title: "Privacy & Data Handling - CareerPath",
-    description: "What CareerPath stores, why, and how to delete it.",
-};
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 const dataItems = [
     {
@@ -34,6 +33,39 @@ const dataItems = [
 ];
 
 export default function PrivacyPage() {
+    const router = useRouter();
+    const [showDelete, setShowDelete] = useState(false);
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [status, setStatus] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    async function handleDelete(e: React.FormEvent) {
+        e.preventDefault();
+        setBusy(true);
+        setStatus(null);
+        try {
+            const res = await fetch("/api/account/delete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password }),
+            });
+            const body = (await res.json()) as { ok?: boolean; error?: string };
+            if (res.ok && body.ok) {
+                setStatus("Your account and all its data have been permanently deleted.");
+                setEmail("");
+                setPassword("");
+                setTimeout(() => router.push("/"), 2500);
+            } else {
+                setStatus(body.error ?? "Deletion failed - please try again.");
+            }
+        } catch {
+            setStatus("Network error - please try again.");
+        } finally {
+            setBusy(false);
+        }
+    }
+
     return (
         <div className="min-h-screen bg-gray-950 text-gray-100">
             <main className="mx-auto max-w-3xl px-6 py-16">
@@ -74,14 +106,68 @@ export default function PrivacyPage() {
                 </section>
 
                 <section className="mb-10">
-                    <h2 className="text-xl font-semibold mb-3">How to delete your data</h2>
-                    <p className="text-gray-300 text-sm leading-relaxed">
-                        Email the platform administrators from your registered email address
-                        asking for deletion, and your account, assessments, submissions,
-                        resume files, analyses, and chat history will be permanently removed.
-                        You can also delete individual chat sessions from the chat page at
-                        any time.
+                    <h2 className="text-xl font-semibold mb-3">Delete your account and data</h2>
+                    <p className="text-gray-300 text-sm leading-relaxed mb-4">
+                        You can delete everything yourself, right here - no email required.
+                        Deletion removes your account, assessments, submissions, resume files,
+                        analyses, and chat history permanently and immediately. This cannot be
+                        undone.
                     </p>
+
+                    {!showDelete ? (
+                        <button
+                            type="button"
+                            onClick={() => setShowDelete(true)}
+                            className="rounded-lg border border-red-800 bg-red-950/50 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-900/50"
+                        >
+                            Delete my account…
+                        </button>
+                    ) : (
+                        <form
+                            onSubmit={handleDelete}
+                            className="rounded-lg border border-red-900 bg-red-950/30 p-5 space-y-3"
+                        >
+                            <p className="text-sm text-red-300">
+                                Confirm with the email and password you sign in with:
+                            </p>
+                            <input
+                                type="email"
+                                required
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                placeholder="you@college.edu"
+                                className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm"
+                            />
+                            <input
+                                type="password"
+                                required
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="Password"
+                                className="w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm"
+                            />
+                            <div className="flex gap-3 pt-1">
+                                <button
+                                    type="submit"
+                                    disabled={busy}
+                                    className="rounded-md bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50"
+                                >
+                                    {busy ? "Deleting…" : "Permanently delete everything"}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowDelete(false);
+                                        setStatus(null);
+                                    }}
+                                    className="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                            {status && <p className="text-sm text-gray-300 pt-1">{status}</p>}
+                        </form>
+                    )}
                 </section>
 
                 <section>

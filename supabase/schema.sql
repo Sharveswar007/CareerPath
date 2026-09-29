@@ -4,7 +4,7 @@
 -- =====================================================
 
 -- Users Table (managed by Auth, but we use a trigger to create public profiles)
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid references auth.users(id) on delete cascade not null primary key,
   email text,
   full_name text,
@@ -34,15 +34,15 @@ create table public.profiles (
 -- Turn on Security
 alter table public.profiles enable row level security;
 
-create policy "Public profiles are viewable by everyone."
+drop policy if exists "Public profiles are viewable by everyone." on public.profiles;create policy "Public profiles are viewable by everyone."
   on public.profiles for select
   using ( true );
 
-create policy "Users can insert their own profile."
+drop policy if exists "Users can insert their own profile." on public.profiles;create policy "Users can insert their own profile."
   on public.profiles for insert
   with check ( auth.uid() = id );
 
-create policy "Users can update own profile."
+drop policy if exists "Users can update own profile." on public.profiles;create policy "Users can update own profile."
   on public.profiles for update
   using ( auth.uid() = id );
 
@@ -65,7 +65,7 @@ create trigger on_auth_user_created
 -- =====================================================
 -- Career Selections Table
 -- =====================================================
-create table public.career_selections (
+create table if not exists public.career_selections (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
   career_name text not null,
@@ -75,22 +75,22 @@ create table public.career_selections (
 
 alter table public.career_selections enable row level security;
 
-create policy "Users can view their own career selections"
+drop policy if exists "Users can view their own career selections" on public.career_selections;create policy "Users can view their own career selections"
   on public.career_selections for select
   using ( auth.uid() = user_id );
 
-create policy "Users can insert their own career selections"
+drop policy if exists "Users can insert their own career selections" on public.career_selections;create policy "Users can insert their own career selections"
   on public.career_selections for insert
   with check ( auth.uid() = user_id );
 
-create policy "Users can update their own career selections"
+drop policy if exists "Users can update their own career selections" on public.career_selections;create policy "Users can update their own career selections"
   on public.career_selections for update
   using ( auth.uid() = user_id );
 
 -- =====================================================
 -- User Assessments Table (stores 20 Q&A)
 -- =====================================================
-create table public.user_assessments (
+create table if not exists public.user_assessments (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
   selected_career text not null,
@@ -104,18 +104,18 @@ create table public.user_assessments (
 
 alter table public.user_assessments enable row level security;
 
-create policy "Users can view their own assessments"
+drop policy if exists "Users can view their own assessments" on public.user_assessments;create policy "Users can view their own assessments"
   on public.user_assessments for select
   using ( auth.uid() = user_id );
 
-create policy "Users can insert their own assessments"
+drop policy if exists "Users can insert their own assessments" on public.user_assessments;create policy "Users can insert their own assessments"
   on public.user_assessments for insert
   with check ( auth.uid() = user_id );
 
 -- =====================================================
 -- Skills Gap Analysis Table
 -- =====================================================
-create table public.skills_gap_analysis (
+create table if not exists public.skills_gap_analysis (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
   assessment_id uuid references public.user_assessments(id),
@@ -130,18 +130,18 @@ create table public.skills_gap_analysis (
 
 alter table public.skills_gap_analysis enable row level security;
 
-create policy "Users can view their own analysis"
+drop policy if exists "Users can view their own analysis" on public.skills_gap_analysis;create policy "Users can view their own analysis"
   on public.skills_gap_analysis for select
   using ( auth.uid() = user_id );
 
-create policy "Users can insert their own analysis"
+drop policy if exists "Users can insert their own analysis" on public.skills_gap_analysis;create policy "Users can insert their own analysis"
   on public.skills_gap_analysis for insert
   with check ( auth.uid() = user_id );
 
 -- =====================================================
 -- Coding Challenges Table (AI Generated)
 -- =====================================================
-create table public.coding_challenges (
+create table if not exists public.coding_challenges (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users(id),
   title text not null,
@@ -156,18 +156,18 @@ create table public.coding_challenges (
 
 alter table public.coding_challenges enable row level security;
 
-create policy "Users can view their own or public challenges"
+drop policy if exists "Users can view their own or public challenges" on public.coding_challenges;create policy "Users can view their own or public challenges"
   on public.coding_challenges for select
   using ( auth.uid() = user_id OR user_id IS NULL );
 
-create policy "Authenticated users can create their own challenges"
+drop policy if exists "Authenticated users can create their own challenges" on public.coding_challenges;create policy "Authenticated users can create their own challenges"
   on public.coding_challenges for insert
   with check ( auth.uid() = user_id );
 
 -- =====================================================
 -- Coding Submissions Table
 -- =====================================================
-create table public.coding_submissions (
+create table if not exists public.coding_submissions (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users(id) not null,
   challenge_id uuid references public.coding_challenges(id) not null,
@@ -182,18 +182,18 @@ create table public.coding_submissions (
 
 alter table public.coding_submissions enable row level security;
 
-create policy "Users can view their own submissions"
+drop policy if exists "Users can view their own submissions" on public.coding_submissions;create policy "Users can view their own submissions"
   on public.coding_submissions for select
   using ( auth.uid() = user_id );
 
-create policy "Users can insert their own submissions"
+drop policy if exists "Users can insert their own submissions" on public.coding_submissions;create policy "Users can insert their own submissions"
   on public.coding_submissions for insert
   with check ( auth.uid() = user_id );
 
 -- =====================================================
 -- Resume Analysis Table
 -- =====================================================
-create table public.resume_analyses (
+create table if not exists public.resume_analyses (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
   file_name text not null,
@@ -206,18 +206,18 @@ create table public.resume_analyses (
 
 alter table public.resume_analyses enable row level security;
 
-create policy "Users can view their own resume analyses"
+drop policy if exists "Users can view their own resume analyses" on public.resume_analyses;create policy "Users can view their own resume analyses"
   on public.resume_analyses for select
   using ( auth.uid() = user_id );
 
-create policy "Users can insert their own resume analyses"
+drop policy if exists "Users can insert their own resume analyses" on public.resume_analyses;create policy "Users can insert their own resume analyses"
   on public.resume_analyses for insert
   with check ( auth.uid() = user_id );
 
 -- =====================================================
 -- Chat History Table
 -- =====================================================
-create table public.chat_history (
+create table if not exists public.chat_history (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
   messages jsonb not null,
@@ -227,22 +227,22 @@ create table public.chat_history (
 
 alter table public.chat_history enable row level security;
 
-create policy "Users can view their own chat history"
+drop policy if exists "Users can view their own chat history" on public.chat_history;create policy "Users can view their own chat history"
   on public.chat_history for select
   using ( auth.uid() = user_id );
 
-create policy "Users can insert their own chat history"
+drop policy if exists "Users can insert their own chat history" on public.chat_history;create policy "Users can insert their own chat history"
   on public.chat_history for insert
   with check ( auth.uid() = user_id );
 
-create policy "Users can update their own chat history"
+drop policy if exists "Users can update their own chat history" on public.chat_history;create policy "Users can update their own chat history"
   on public.chat_history for update
   using ( auth.uid() = user_id );
 
 -- =====================================================
 -- User Activity Table (for streak tracking)
 -- =====================================================
-create table public.user_activity (
+create table if not exists public.user_activity (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
   activity_date date not null default current_date,
@@ -253,22 +253,22 @@ create table public.user_activity (
 
 alter table public.user_activity enable row level security;
 
-create policy "Users can view their own activity"
+drop policy if exists "Users can view their own activity" on public.user_activity;create policy "Users can view their own activity"
   on public.user_activity for select
   using ( auth.uid() = user_id );
 
-create policy "Users can insert their own activity"
+drop policy if exists "Users can insert their own activity" on public.user_activity;create policy "Users can insert their own activity"
   on public.user_activity for insert
   with check ( auth.uid() = user_id );
 
-create policy "Users can update their own activity"
+drop policy if exists "Users can update their own activity" on public.user_activity;create policy "Users can update their own activity"
   on public.user_activity for update
   using ( auth.uid() = user_id );
 
 -- =====================================================
 -- Proctoring Violations Table (Malpractice Tracking)
 -- =====================================================
-create table public.proctoring_violations (
+create table if not exists public.proctoring_violations (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
   assessment_type text not null,
@@ -278,18 +278,18 @@ create table public.proctoring_violations (
 
 alter table public.proctoring_violations enable row level security;
 
-create policy "Users can view their own violations"
+drop policy if exists "Users can view their own violations" on public.proctoring_violations;create policy "Users can view their own violations"
   on public.proctoring_violations for select
   using ( auth.uid() = user_id );
 
-create policy "Users can insert their own violations"
+drop policy if exists "Users can insert their own violations" on public.proctoring_violations;create policy "Users can insert their own violations"
   on public.proctoring_violations for insert
   with check ( auth.uid() = user_id );
 
 -- =====================================================
 -- Tests Table
 -- =====================================================
-create table public.tests (
+create table if not exists public.tests (
   id uuid default gen_random_uuid() primary key,
   creator_id uuid references auth.users(id) not null,
   code text not null unique,
@@ -301,22 +301,22 @@ create table public.tests (
 
 alter table public.tests enable row level security;
 
-create policy "Anyone can view tests"
+drop policy if exists "Anyone can view tests" on public.tests;create policy "Anyone can view tests"
   on public.tests for select
   using ( true );
 
-create policy "Teachers can insert tests"
+drop policy if exists "Teachers can insert tests" on public.tests;create policy "Teachers can insert tests"
   on public.tests for insert
   with check ( exists (select 1 from public.profiles where id = auth.uid() and role = 'teacher') );
 
-create policy "Teachers can update their own tests"
+drop policy if exists "Teachers can update their own tests" on public.tests;create policy "Teachers can update their own tests"
   on public.tests for update
   using ( creator_id = auth.uid() );
 
 -- =====================================================
 -- Test Questions Table
 -- =====================================================
-create table public.test_questions (
+create table if not exists public.test_questions (
   id uuid default gen_random_uuid() primary key,
   test_id uuid references public.tests(id) on delete cascade not null,
   type text not null check (type in ('mcq', 'fill_in_blank', 'coding')),
@@ -328,18 +328,18 @@ create table public.test_questions (
 
 alter table public.test_questions enable row level security;
 
-create policy "Anyone can view test questions"
+drop policy if exists "Anyone can view test questions" on public.test_questions;create policy "Anyone can view test questions"
   on public.test_questions for select
   using ( true );
 
-create policy "Teachers can insert test questions"
+drop policy if exists "Teachers can insert test questions" on public.test_questions;create policy "Teachers can insert test questions"
   on public.test_questions for insert
   with check ( exists (select 1 from public.profiles where id = auth.uid() and role = 'teacher') );
 
 -- =====================================================
 -- Test Sessions Table
 -- =====================================================
-create table public.test_sessions (
+create table if not exists public.test_sessions (
   id uuid default gen_random_uuid() primary key,
   test_id uuid references public.tests(id) on delete cascade not null,
   student_id uuid references auth.users(id) not null,
@@ -351,22 +351,22 @@ create table public.test_sessions (
 
 alter table public.test_sessions enable row level security;
 
-create policy "Users can view their own sessions or teachers can view all"
+drop policy if exists "Users can view their own sessions or teachers can view all" on public.test_sessions;create policy "Users can view their own sessions or teachers can view all"
   on public.test_sessions for select
   using ( auth.uid() = student_id OR exists (select 1 from public.tests where creator_id = auth.uid() and id = test_id) );
 
-create policy "Students can insert their own sessions"
+drop policy if exists "Students can insert their own sessions" on public.test_sessions;create policy "Students can insert their own sessions"
   on public.test_sessions for insert
   with check ( auth.uid() = student_id );
 
-create policy "Students can update their own sessions"
+drop policy if exists "Students can update their own sessions" on public.test_sessions;create policy "Students can update their own sessions"
   on public.test_sessions for update
   using ( auth.uid() = student_id );
 
 -- =====================================================
 -- Test Submissions Table
 -- =====================================================
-create table public.test_submissions (
+create table if not exists public.test_submissions (
   id uuid default gen_random_uuid() primary key,
   session_id uuid references public.test_sessions(id) on delete cascade not null,
   question_id uuid references public.test_questions(id) on delete cascade not null,
@@ -381,25 +381,25 @@ create table public.test_submissions (
 
 alter table public.test_submissions enable row level security;
 
-create policy "Students can view their own submissions or teachers can view all"
+drop policy if exists "Students can view their own submissions or teachers can view all" on public.test_submissions;create policy "Students can view their own submissions or teachers can view all"
   on public.test_submissions for select
   using ( 
     exists (select 1 from public.test_sessions where id = session_id and student_id = auth.uid()) OR 
     exists (select 1 from public.test_sessions s join public.tests t on s.test_id = t.id where s.id = session_id and t.creator_id = auth.uid()) 
   );
 
-create policy "Students can insert their own submissions"
+drop policy if exists "Students can insert their own submissions" on public.test_submissions;create policy "Students can insert their own submissions"
   on public.test_submissions for insert
   with check ( exists (select 1 from public.test_sessions where id = session_id and student_id = auth.uid()) );
 
-create policy "Students can update their own submissions"
+drop policy if exists "Students can update their own submissions" on public.test_submissions;create policy "Students can update their own submissions"
   on public.test_submissions for update
   using ( exists (select 1 from public.test_sessions where id = session_id and student_id = auth.uid()) );
 
 -- =====================================================
 -- Test Results Table
 -- =====================================================
-create table public.test_results (
+create table if not exists public.test_results (
   id uuid default gen_random_uuid() primary key,
   test_id uuid references public.tests(id) on delete cascade not null,
   student_id uuid references auth.users(id) not null,
@@ -412,18 +412,101 @@ create table public.test_results (
 
 alter table public.test_results enable row level security;
 
-create policy "Users can view their own results or teachers can view all"
+drop policy if exists "Users can view their own results or teachers can view all" on public.test_results;create policy "Users can view their own results or teachers can view all"
   on public.test_results for select
   using ( auth.uid() = student_id OR exists (select 1 from public.tests where creator_id = auth.uid() and id = test_id) );
 
-create policy "Teachers can insert results"
+drop policy if exists "Teachers can insert results" on public.test_results;create policy "Teachers can insert results"
   on public.test_results for insert
   with check ( exists (select 1 from public.tests where creator_id = auth.uid() and id = test_id) );
 
-create policy "Students can insert their own results via api"
+drop policy if exists "Students can insert their own results via api" on public.test_results;create policy "Students can insert their own results via api"
   on public.test_results for insert
   with check ( auth.uid() = student_id );
 
-create policy "Students can update their own results"
+drop policy if exists "Students can update their own results" on public.test_results;create policy "Students can update their own results"
   on public.test_results for update
   using ( auth.uid() = student_id );
+-- Account deletion (backs the /privacy promise)
+-- =====================================================
+-- Several user-owned tables above have plain FKs (no ON DELETE CASCADE), so
+-- deleting an auth user directly would fail. Three SECURITY DEFINER functions:
+--
+--   cleanup_user_rows_data(uuid) - removes rows that would block the delete
+--                                 (plain function, called by both paths below)
+--   cleanup_user_rows()          - trigger wrapper (BEFORE DELETE on auth.users,
+--                                 so manual deletes in Studio also work)
+--   delete_user_data(uuid)       - runs the cleanup, then deletes the auth user
+--                                 (FK cascades wipe profiles, assessments,
+--                                 chats, resumes, activity, proctoring...)
+--                                 Called by POST /api/account/delete.
+create or replace function public.cleanup_user_rows_data(target uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- submissions pointing at challenges owned by the user (incl. other users')
+  delete from coding_submissions
+   where challenge_id in (select id from coding_challenges where user_id = target);
+
+  delete from coding_submissions where user_id = target;
+  delete from coding_challenges  where user_id = target;
+  delete from test_sessions      where student_id = target;
+  delete from test_results       where student_id = target;
+end;
+$$;
+
+create or replace function public.cleanup_user_rows()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.cleanup_user_rows_data(OLD.id);
+  return OLD;
+end;
+$$;
+
+create or replace function public.delete_user_data(target uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform public.cleanup_user_rows_data(target);
+  delete from auth.users where id = target;
+end;
+$$;
+
+-- only the service role may call these functions directly
+revoke all on function public.delete_user_data(uuid) from public;
+grant execute on function public.delete_user_data(uuid) to service_role;
+
+-- safety net: even a manual delete in Studio cleans up owned rows first
+drop trigger if exists on_auth_user_delete on auth.users;
+create trigger on_auth_user_delete
+  before delete on auth.users
+  for each row execute procedure public.cleanup_user_rows();
+
+-- =====================================================
+-- Demo seed data (idempotent - safe to re-run)
+-- =====================================================
+-- Public starter challenges (user_id IS NULL = visible to everyone via RLS).
+-- starter_code/test_cases are jsonb, hence the explicit casts.
+insert into public.coding_challenges (user_id, title, description, difficulty, category, starter_code, test_cases)
+select * from (values
+  (null::uuid, 'Two Sum', 'Given an array of integers, return indices of the two numbers that add up to a target.', 'easy', 'arrays',
+   '{"python": "def two_sum(nums, target):\n    # your code here\n    pass\n", "javascript": "function twoSum(nums, target) {\n  // your code here\n}\n"}'::jsonb,
+   '[{"input": "[2,7,11,15], 9", "expected": "[0,1]"}, {"input": "[3,2,4], 6", "expected": "[1,2]"}]'::jsonb),
+  (null::uuid, 'Reverse String', 'Reverse the given string without using built-in reverse functions.', 'easy', 'strings',
+   '{"python": "def reverse_string(s: str) -> str:\n    # your code here\n    pass\n", "javascript": "function reverseString(s) {\n  // your code here\n}\n"}'::jsonb,
+   '[{"input": "hello", "expected": "olleh"}, {"input": "CareerPath", "expected": "htapreeraC"}]'::jsonb),
+  (null::uuid, 'FizzBuzz', 'Print numbers 1 to n, replacing multiples of 3 with Fizz, 5 with Buzz, and both with FizzBuzz.', 'easy', 'loops',
+   '{"python": "def fizz_buzz(n: int) -> list:\n    # your code here\n    pass\n", "javascript": "function fizzBuzz(n) {\n  // your code here\n}\n"}'::jsonb,
+   '[{"input": "5", "expected": "[1,2,Fizz,4,Buzz]"}, {"input": "15", "expected": "[1,2,Fizz,4,Buzz,Fizz,7,8,Fizz,Buzz,11,Fizz,13,14,FizzBuzz]"}]'::jsonb)
+) AS seed(user_id, title, description, difficulty, category, starter_code, test_cases)
+where not exists (select 1 from public.coding_challenges where title = 'Two Sum');

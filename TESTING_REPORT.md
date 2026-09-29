@@ -178,3 +178,36 @@ powershell -ExecutionPolicy Bypass -File server\tunnel\get-tunnel-urls.ps1   # -
 powershell -ExecutionPolicy Bypass -File server\smoke-test.ps1
 powershell -ExecutionPolicy Bypass -File server\load-test.ps1 -Users 65      # the concurrency proof
 ```
+
+---
+
+## 8. Addendum — accuracy + operations cycle (Sep 29 evening)
+
+New features, all **verified live** against the local stack:
+
+| # | Test | Result |
+|---|---|---|
+| A1 | Account deletion — trigger path (manual Studio delete wipes profile/chat/submissions) | ✅ |
+| A2 | Account deletion — API path (`delete_user_data` RPC as service_role, HTTP 204, all rows gone) | ✅ |
+| A3 | Delete route guards — 401 unauthenticated / 400 missing credentials | ✅ |
+| A4 | Demo accounts — 3 students created + password login verified | ✅ |
+| A5 | Backup — pg_dump 737 KB + restore drill PASSED (15 tables, seeds intact) | ✅ |
+| A6 | Schema idempotency — full `schema.sql` re-run: EXIT 0, data preserved, 39 policies intact | ✅ |
+| A7 | Seed data — 3 public challenges auto-inserted | ✅ |
+| A8 | Dedupe path — quiz route returns filtered questions | ✅ |
+| A9 | Rate limiter re-check — 9×200 then 429 (shared bucket across routes) | ✅ |
+| A10 | Chat streaming + privacy page after client-component conversion | ✅ 200 |
+| A11 | Smoke test — 6/6 PASS | ✅ |
+| A12 | **Linux CI parity** (node:20 container, exact CI commands) — install/tsc/eslint/vitest 21/21/build all OK | ✅ |
+
+**Bug found & fixed this cycle:** `delete_user_data` originally `PERFORM`ed a
+trigger function directly → Postgres error `trigger functions can only be
+called as triggers`. Refactored into `cleanup_user_rows_data(uuid)` (plain
+function) + trigger wrapper + RPC wrapper; both deletion paths re-verified.
+
+**New artifacts:** `RUNBOOK.md`, `server/golden-set.ps1` +
+`golden-prompts.json` (structural accuracy scorecard), `server/backup-db.ps1`,
+`server/create-demo-accounts.ps1`, `/api/account/delete` +
+`src/lib/supabase/admin.ts`, `src/lib/ai/dedupe.ts` (+7 tests, 21 total),
+`src/lib/obs/request-id.ts` (wired into 4 routes), `AI_TIMEOUT_MS` knob,
+idempotent schema + seed data.

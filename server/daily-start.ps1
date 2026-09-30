@@ -31,6 +31,11 @@ $ErrorActionPreference = "Continue"
 # sibling scripts live next to this file (both are in the server/ folder)
 $root = $PSScriptRoot
 
+# log every run (lets you check from anywhere whether the 9 AM auto-start worked)
+$logDir = Join-Path $PSScriptRoot "logs"
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
+Start-Transcript -Path (Join-Path $logDir ("daily-start-{0}.log" -f (Get-Date -Format "yyyyMMdd"))) -Append | Out-Null
+
 Write-Host ""
 Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host "  CareerPath daily start  $(Get-Date -Format 'ddd dd MMM yyyy  HH:mm')" -ForegroundColor Cyan
@@ -169,3 +174,4 @@ Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "At 6 PM run:  powershell -ExecutionPolicy Bypass -File server\stop-all.ps1" -ForegroundColor DarkGray
 Write-Host ""
+Stop-Transcript | Out-Null

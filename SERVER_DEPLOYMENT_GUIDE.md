@@ -213,6 +213,73 @@ Full ops manual (fallbacks, diagnosis, demo-day checklist): **`RUNBOOK.md`**.
 
 ---
 
+## PART 6 — Named tunnel: URLs that NEVER change (recommended once demo works)
+
+Quick tunnels give new random URLs every morning (handled automatically by
+daily-start). The permanent upgrade is a **named tunnel** on your own domain —
+URLs never change again and daily-start stops needing the Vercel step.
+
+One-time, ~30 min, ~₹500/yr:
+
+1. Buy a domain (any registrar). In Cloudflare (free account): **Add site** →
+   it shows 2 nameservers → paste those 2 into your registrar's DNS settings.
+2. Cloudflare dashboard → **Zero Trust → Networks → Tunnels → Create tunnel**
+   → type "Cloudflared" → name it `careerpath`.
+3. In the tunnel's **Public Hostname** tab, add 3 routes:
+   ```
+   vllm.yourdomain.com     ->  http://localhost:8001
+   supabase.yourdomain.com ->  http://localhost:8000
+   judge0.yourdomain.com   ->  http://localhost:2358
+   ```
+4. Copy the tunnel **token** (starts with `eyJ`). On the server:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File server\tunnel\start-named-tunnel.ps1 -Token "eyJ..."
+   ```
+5. In Vercel set the 3 env vars to the new URLs **once** (never again):
+   `AI_BASE_URL=https://vllm.yourdomain.com/v1`,
+   `NEXT_PUBLIC_SUPABASE_URL=https://supabase.yourdomain.com`,
+   `JUDGE0_URL=https://judge0.yourdomain.com` → Redeploy.
+6. From now on, mornings are even simpler:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File server\daily-start.ps1 -SkipVercel
+   ```
+   (No Vercel step — nothing changes.) The task also survives networks that
+   block trycloudflare, since traffic flows through your own domain.
+
+## PART 7 — Fully automatic 9 AM start (optional, 5 min)
+
+`daily-start.ps1` is one command — but you can remove even that:
+
+```powershell
+# registers a Windows Scheduled Task (run once, on the server)
+powershell -ExecutionPolicy Bypass -File server\register-autostart.ps1          # 09:00 daily
+powershell -ExecutionPolicy Bypass -File server\register-autostart.ps1 -Time 08:45   # custom time
+```
+
+For it to actually fire hands-off, do these three things once:
+1. **Auto-login**: `netplwiz` → uncheck "Users must enter a user name and password".
+2. **Never sleep** when plugged in (Settings → Power).
+3. Leave it plugged in; the task logs to `server\logs\daily-start-YYYYMMDD.log`
+   so you can verify from anywhere each morning.
+
+Undo anytime: `...register-autostart.ps1 -Remove`.
+Honest limits: it cannot power on a shut-down PC (enable Wake-on-LAN in BIOS
+if you want that), and Windows updates can reboot it — pause them (RUNBOOK §4).
+
+## PART 8 — UptimeRobot: know about outages before students do (5 min)
+
+1. uptimerobot.com → free account → **Add New Monitor**.
+2. Type: HTTP(s) · Name: `CareerPath health` · URL: `https://<your-vercel-url>/api/health`
+   · Interval: 5 minutes.
+3. Add a second monitor for the Supabase URL (`.../rest/v1/` — it should
+   answer 401, which counts as "up" if you pick the keyword monitor type with
+   keyword `code`).
+4. Alerting: Settings → Alerts → connect email (or Telegram/Discord).
+
+Now if the tunnel, GPU server, or app dies at 10 AM, you get pinged before
+the first student notices. This pairs with `/api/health`, which already
+checks Supabase + AI + Judge0 with timeouts.
+
 ## Quick reference card (print this)
 
 ```powershell

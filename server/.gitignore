@@ -1,3 +1,6 @@
 # Generated secrets - never commit
 supabase/docker/.env
 .env.server
+
+# daily-start run logs
+server/logs/

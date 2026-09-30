@@ -48,8 +48,14 @@ scripts, dead-dependency removal, 21 unit tests, all 11 route tests.
 
 - [ ] Rotate the old leaked RapidAPI key on their dashboard
 - [ ] UptimeRobot free monitor → point it at `<vercel-url>/api/health`
+  (exact steps: SERVER_DEPLOYMENT_GUIDE.md PART 8)
 - [ ] Sentry free tier (optional but recommended)
-- [ ] Domain (~₹500/yr) + Cloudflare named tunnel for stable URLs
+- [ ] Domain (~₹500/yr) + Cloudflare named tunnel for stable URLs →
+  ready-made script: `server/tunnel/start-named-tunnel.ps1 -Token ...`
+  (walkthrough: SERVER_DEPLOYMENT_GUIDE.md PART 6). After this, run
+  `daily-start.ps1 -SkipVercel` every morning — URLs never change again
+- [ ] Optional full auto-pilot: `server/register-autostart.ps1` registers a
+  9 AM Scheduled Task (SERVER_DEPLOYMENT_GUIDE.md PART 7)
 - [ ] UPS + Windows Update Active Hours for demo day
 
 ## 🔵 3. Nice-to-have (skip unless time remains)
@@ -66,7 +72,11 @@ scripts, dead-dependency removal, 21 unit tests, all 11 route tests.
   failure map, printable quick-reference card
 - **`server/daily-start.ps1`** — ONE command every morning: Docker check →
   all services → waits for AI load → prints URLs → auto-updates Vercel
-  (with CLI) or prints exact manual steps → READY/NOT-READY verdict
+  (with CLI) or prints exact manual steps → READY/NOT-READY verdict.
+  **Live-tested end-to-end** (6 bugs found & fixed; tunnel round-trip proven)
+- **`server/register-autostart.ps1`** — registers the 9 AM Scheduled Task
+- **`server/tunnel/start-named-tunnel.ps1`** — permanent URLs via your own
+  domain (after this, mornings need `-SkipVercel` only)
 - Evening shutdown stays: `server/stop-all.ps1`
 
 **Cost audit result: entire stack runs at ₹0/month** (Vercel Hobby,

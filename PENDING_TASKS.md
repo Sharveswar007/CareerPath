@@ -65,6 +65,22 @@ scripts, dead-dependency removal, 21 unit tests, all 11 route tests.
   (network-side); if it recurs on the server, use phone hotspot as fallback
 - Tavily grounding for exam/trends answers (accuracy upgrade, ~half a day)
 
+## 🆕 Decision — Sep 30: tunnels
+
+**Quick tunnels now, domain later.** Quick tunnels (trycloudflare.com) are
+the shipping setup: ₹0, no account, already automated in daily-start.ps1
+(Vercel auto-update handles the changing URLs). The named-tunnel script
+(`server/tunnel/start-named-tunnel.ps1`) stays ready for whenever a domain
+(~₹500/yr) is bought — that switch needs no code changes. Only tradeoff to
+remember: if the college network blocks trycloudflare, fallback = phone
+hotspot (RUNBOOK §4).
+
+**Full verification pass (Sep 30):** tsc 0 errors · ESLint 0 errors (119
+documented warnings) · vitest 21/21 · production build OK · all 13 server
+PowerShell scripts parse-clean · docs cross-checked (AI_BASE_URL standardized
+to root form, no /v1, across guide/README/daily-start) · server/ fully
+tracked in git.
+
 ## 🆕 Added Sep 30 (final round)
 
 - **`SERVER_DEPLOYMENT_GUIDE.md`** — complete layman deployment walkthrough:

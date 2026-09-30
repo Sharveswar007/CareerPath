@@ -123,7 +123,7 @@ if ($SkipVercel) {
         Write-Host "  Vercel CLI not installed or not logged in - do the 2-minute manual way:" -ForegroundColor Yellow
         Write-Host "    1. Copy the 3 URLs printed above"
         Write-Host "    2. vercel.com -> your project -> Settings -> Environment Variables"
-        Write-Host "    3. Update: AI_BASE_URL (add /v1), NEXT_PUBLIC_SUPABASE_URL, JUDGE0_URL"
+        Write-Host "    3. Update: AI_BASE_URL (root, no /v1), NEXT_PUBLIC_SUPABASE_URL, JUDGE0_URL"
         Write-Host "    4. Deployments -> Redeploy"
         Write-Host "  (Install once to automate:  npm i -g vercel ;  vercel login)"
     } else {
@@ -145,7 +145,7 @@ if ($SkipVercel) {
             & vercel env rm AI_BASE_URL production $proj --yes 2>$null | Out-Null
             & vercel env rm NEXT_PUBLIC_SUPABASE_URL production $proj --yes 2>$null | Out-Null
             & vercel env rm JUDGE0_URL production $proj --yes 2>$null | Out-Null
-            "$($urls.VLLM)/v1" | & vercel env add AI_BASE_URL production $proj 2>$null | Out-Null
+            "$($urls.VLLM)" | & vercel env add AI_BASE_URL production $proj 2>$null | Out-Null
             "$($urls.SUPA)"    | & vercel env add NEXT_PUBLIC_SUPABASE_URL production $proj 2>$null | Out-Null
             "$($urls.JUDGE0)"  | & vercel env add JUDGE0_URL production $proj 2>$null | Out-Null
             Write-Host "  Redeploying..."

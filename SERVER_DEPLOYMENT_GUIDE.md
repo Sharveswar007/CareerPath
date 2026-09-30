@@ -83,7 +83,7 @@ set (copy values exactly from `server/README.md` Step 6 — tokens included):
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://<supabase-tunnel-url>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<from server/supabase/docker/.env, line ANON_KEY>
-AI_BASE_URL=https://<vllm-tunnel-url>/v1
+AI_BASE_URL=https://<vllm-tunnel-url>   (no /v1 — the app adds its own paths)
 AI_API_KEY=cp-vllm-4f9d2a81c67b45e3a2d80f19c3e75b64
 AI_MODEL=careerpath-ai
 GROQ_API_KEY=dummy_not_used
@@ -236,7 +236,7 @@ One-time, ~30 min, ~₹500/yr:
    powershell -ExecutionPolicy Bypass -File server\tunnel\start-named-tunnel.ps1 -Token "eyJ..."
    ```
 5. In Vercel set the 3 env vars to the new URLs **once** (never again):
-   `AI_BASE_URL=https://vllm.yourdomain.com/v1`,
+   `AI_BASE_URL=https://vllm.yourdomain.com` (no /v1),
    `NEXT_PUBLIC_SUPABASE_URL=https://supabase.yourdomain.com`,
    `JUDGE0_URL=https://judge0.yourdomain.com` → Redeploy.
 6. From now on, mornings are even simpler:

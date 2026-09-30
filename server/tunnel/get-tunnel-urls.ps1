@@ -9,11 +9,19 @@ $containers = @(
 
 foreach ($c in $containers) {
     $logs = docker logs $c.Name 2>&1 | Out-String
-    if ($logs -match "https://[a-zA-Z0-9-]+\.trycloudflare\.com") {
-        $url = $Matches[0]
+    # pick the real tunnel URL, ignoring the api.trycloudflare.com host that
+    # appears in error lines when tunnel creation fails
+    $url = [regex]::Matches($logs, "https://[a-zA-Z0-9-]+\.trycloudflare\.com") |
+        ForEach-Object { $_.Value } |
+        Where-Object { $_ -notmatch "^https://api\." } |
+        Select-Object -First 1
+    if ($url) {
         Write-Host ("{0} : {1}" -f $c.Label, $url) -ForegroundColor Green
     } else {
         Write-Host ("{0} : no URL found yet - wait ~10s and re-run, or check 'docker logs {1}'" -f $c.Label, $c.Name) -ForegroundColor Yellow
+        if ($logs -match "failed to request quick Tunnel") {
+            Write-Host "    (tunnel creation failed - see RUNBOOK.md: network may block trycloudflare; try a hotspot)" -ForegroundColor DarkYellow
+        }
     }
 }
 

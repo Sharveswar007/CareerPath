@@ -21,11 +21,15 @@
 # named tunnel with a domain (see server/README.md "Before real users").
 
 param(
-    [switch]$SkipVercel
+    [switch]$SkipVercel,
+    [switch]$SkipVllm,
+    [switch]$SkipTunnel,
+    [string]$Model
 )
 
 $ErrorActionPreference = "Continue"
-$root = Split-Path $PSScriptRoot -Parent
+# sibling scripts live next to this file (both are in the server/ folder)
+$root = $PSScriptRoot
 
 Write-Host ""
 Write-Host "=============================================" -ForegroundColor Cyan
@@ -46,8 +50,13 @@ Write-Host "  Docker OK" -ForegroundColor Green
 
 # ---------- 2. All services ----------
 Write-Host "`n[2/6] Starting Judge0 + Supabase + vLLM + tunnels..." -ForegroundColor Yellow
-& powershell -ExecutionPolicy Bypass -File "$root\start-all.ps1" @args
-# (pass through -Model/-SkipTunnel/etc. if you added them on the command line)
+$startAll = @{}
+if ($SkipVllm)   { $startAll.SkipVllm   = $true }
+if ($SkipTunnel) { $startAll.SkipTunnel = $true }
+if ($Model)      { $startAll.Model      = $Model }
+# in-process call (NOT `powershell -File`): hashtable splatting maps switch
+# parameters correctly only within the same PowerShell session
+& "$root\start-all.ps1" @startAll
 
 # ---------- 3. Wait for health ----------
 Write-Host "`n[3/6] Waiting for services to become healthy..." -ForegroundColor Yellow
@@ -55,10 +64,13 @@ $deadline = (Get-Date).AddMinutes(6)
 $ready = $false
 $elapsed = 0
 while ((Get-Date) -lt $deadline) {
-    $vllmOk    = ($null -ne (docker ps --format "{{.Names}}" | Select-String -Quiet -Pattern "vllm"))
-    $supaOk    = ($null -ne (docker ps --format "{{.Names}}" | Select-String -Quiet -Pattern "supabase-kong"))
-    $judgeOk   = ($null -ne (docker ps --format "{{.Names}}" | Select-String -Quiet -Pattern "judge0-server"))
-    $tunnelsOk = ((docker ps --format "{{.Names}}" | Select-String -Pattern "cloudflared").Count -ge 3)
+    $names     = docker ps --format "{{.Names}}"
+    $vllmOk    = $SkipVllm -or ($null -ne ($names | Select-String -Quiet -Pattern "vllm"))
+    # gateway container is 'supabase-kong' in newer supabase compose files,
+    # 'supabase-envoy' in the vendored version - accept either
+    $supaOk    = ($null -ne ($names | Select-String -Quiet -Pattern "supabase-kong|supabase-envoy"))
+    $judgeOk   = ($null -ne ($names | Select-String -Quiet -Pattern "judge0-server"))
+    $tunnelsOk = $SkipTunnel -or (($names | Select-String -Pattern "cloudflared").Count -ge 3)
     if ($vllmOk -and $supaOk -and $judgeOk -and $tunnelsOk) { $ready = $true; break }
     $elapsed += 10
     Write-Host "  ...containers coming up ($elapsed s elapsed)" -ForegroundColor DarkGray
@@ -71,16 +83,20 @@ if ($ready) {
     Write-Host "  Run:  docker ps -a   and check 'docker logs <name>' for the failing one." -ForegroundColor Yellow
 }
 
-# vLLM needs extra time to load the model into VRAM the FIRST time each day
-Write-Host "  Waiting for the AI model to finish loading (2-4 min first start of the day)..." -ForegroundColor DarkGray
-$vllmReady = $false
-for ($i = 0; $i -lt 36; $i++) {
-    $r = docker logs vllm 2>&1 | Out-String
-    if ($r -match "Uvicorn running|Application startup complete") { $vllmReady = $true; break }
-    Start-Sleep -Seconds 10
+if ($SkipVllm) {
+    Write-Host "  vLLM skipped (-SkipVllm) - AI stays unavailable until started." -ForegroundColor DarkGray
+} else {
+    # vLLM needs extra time to load the model into VRAM the FIRST time each day
+    Write-Host "  Waiting for the AI model to finish loading (2-4 min first start of the day)..." -ForegroundColor DarkGray
+    $vllmReady = $false
+    for ($i = 0; $i -lt 36; $i++) {
+        $r = docker logs vllm 2>&1 | Out-String
+        if ($r -match "Uvicorn running|Application startup complete") { $vllmReady = $true; break }
+        Start-Sleep -Seconds 10
+    }
+    if ($vllmReady) { Write-Host "  AI model loaded and serving." -ForegroundColor Green }
+    else { Write-Host "  vLLM still loading or something failed - check: docker logs vllm" -ForegroundColor Yellow }
 }
-if ($vllmReady) { Write-Host "  AI model loaded and serving." -ForegroundColor Green }
-else { Write-Host "  vLLM still loading or something failed - check: docker logs vllm" -ForegroundColor Yellow }
 
 # ---------- 4. URLs ----------
 Write-Host "`n[4/6] Today's public tunnel URLs:" -ForegroundColor Yellow
@@ -109,7 +125,11 @@ if ($SkipVercel) {
         $urls = @{}
         foreach ($c in @(@{n="cloudflared-vllm";k="VLLM"},@{n="cloudflared-supabase";k="SUPA"},@{n="cloudflared-judge0";k="JUDGE0"})) {
             $logs = docker logs $c.n 2>&1 | Out-String
-            if ($logs -match "https://[a-zA-Z0-9-]+\.trycloudflare\.com") { $urls[$c.k] = $Matches[0] }
+            $found = [regex]::Matches($logs, "https://[a-zA-Z0-9-]+\.trycloudflare\.com") |
+                ForEach-Object { $_.Value } |
+                Where-Object { $_ -notmatch "^https://api\." } |
+                Select-Object -First 1
+            if ($found) { $urls[$c.k] = $found }
         }
         if ($urls.VLLM -and $urls.SUPA -and $urls.JUDGE0) {
             $proj = $null

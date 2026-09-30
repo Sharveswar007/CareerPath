@@ -79,7 +79,10 @@ hotspot (RUNBOOK §4).
 documented warnings) · vitest 21/21 · production build OK · all 13 server
 PowerShell scripts parse-clean · docs cross-checked (AI_BASE_URL standardized
 to root form, no /v1, across guide/README/daily-start) · server/ fully
-tracked in git.
+tracked in git. **Vercel install fix:** plain `npm install` on Vercel hit a
+vitest@5 ↔ @types/node@^20 peer conflict → bumped to ^22, lockfile
+regenerated fresh, CI now uses plain `npm ci` (no flags) — Vercel path and
+CI path are identical.
 
 ## 🆕 Added Sep 30 (final round)
 

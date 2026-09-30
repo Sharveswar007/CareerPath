@@ -15,9 +15,11 @@ jobs:
         with:
           node-version: 20
 
-      # npm ci uses the committed package-lock.json for reproducible installs
+      # npm ci uses the committed package-lock.json for reproducible installs.
+      # Installs clean with no peer-dep flags: @types/node@^22 satisfies vitest@5.
+      # (Vercel's plain npm install uses this same path.)
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci
 
       - name: Typecheck
         run: npx tsc --noEmit

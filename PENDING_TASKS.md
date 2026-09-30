@@ -58,3 +58,19 @@ scripts, dead-dependency removal, 21 unit tests, all 11 route tests.
 - Cloudflare quick-tunnel URLs were blocked from this machine earlier today
   (network-side); if it recurs on the server, use phone hotspot as fallback
 - Tavily grounding for exam/trends answers (accuracy upgrade, ~half a day)
+
+## 🆕 Added Sep 30 (final round)
+
+- **`SERVER_DEPLOYMENT_GUIDE.md`** — complete layman deployment walkthrough:
+  first-time setup, daily 9 AM / 6 PM routine, full free-tier cost audit,
+  failure map, printable quick-reference card
+- **`server/daily-start.ps1`** — ONE command every morning: Docker check →
+  all services → waits for AI load → prints URLs → auto-updates Vercel
+  (with CLI) or prints exact manual steps → READY/NOT-READY verdict
+- Evening shutdown stays: `server/stop-all.ps1`
+
+**Cost audit result: entire stack runs at ₹0/month** (Vercel Hobby,
+self-hosted vLLM/Supabase/Judge0, free Cloudflare tunnels). Optional ₹500/yr
+domain for stable URLs is the only suggested spend. Tavily/OCR.space have
+free tiers with graceful in-app fallbacks. Rotate the leaked RapidAPI key
+(legacy path, unused on the server).

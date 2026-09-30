@@ -1,319 +1,235 @@
-# 🚀 Complete Windows Server Deployment Guide: RTX 5090 + Vercel
+# CareerPath — Complete Server Deployment Guide (Layman Edition)
 
-This is the **definitive, step-by-step master guide** to setting up your entire infrastructure on a **Windows 10 / 11** machine equipped with an **NVIDIA GeForce RTX 5090 (32GB VRAM), 64GB RAM, and 2TB Storage**, and connecting it to your frontend domain hosted on **Vercel**.
-
-Every command in this guide is designed for **Windows PowerShell**.
-
----
-
-## 📑 Table of Contents
-1. [Architecture Overview](#1-architecture-overview)
-2. [Prerequisites on Windows](#2-prerequisites-on-windows)
-3. [Folder Setup on Windows](#3-folder-setup-on-windows)
-4. [Step 1: Deploy vLLM CodeLlama-13B (GPU Accelerated)](#step-1-deploy-vllm-codellama-13b-gpu-accelerated)
-5. [Step 2: Deploy Self-Hosted Supabase](#step-2-deploy-self-hosted-supabase)
-6. [Step 3: Deploy Judge0 Code Sandbox](#step-3-deploy-judge0-code-sandbox)
-7. [Step 4: Connect Windows Services to Vercel via Cloudflare Tunnel](#step-4-connect-windows-services-to-vercel-via-cloudflare-tunnel)
-8. [Step 5: Deploy CareerPath on Vercel](#step-5-deploy-careerpath-on-vercel)
-9. [Step 6: Verify the Complete System End-to-End](#step-6-verify-the-complete-system-end-to-end)
-10. [Daily Management & PC Restart Cheat Sheet](#daily-management--pc-restart-cheat-sheet)
+Every step from zero to students-using-it, plus the **daily 9-to-6 routine**,
+a full **"is anything paid?" audit**, and what to do when something breaks.
+Follow top to bottom. Don't skip steps marked ⚠️.
 
 ---
 
-## 1. Architecture Overview
+## PART 1 — First-time setup (one afternoon, ~1–2 hours)
 
-Your RTX 5090 Windows PC acts as the **high-performance backend server** running 3 Docker services, while **Vercel** delivers the Next.js web application to students globally:
+### Step 0 — What you need before starting
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                          VERCEL CLOUD                            │
-│  Domain: https://your-careerpath.vercel.app                      │
-│  (Next.js App + SSR Pages + API Handlers)                        │
-└────────────────┬────────────────┬─────────────────┬──────────────┘
-                 │                │                 │
-                 │ HTTPS (Secured via Cloudflare Tunnel)
-                 ▼                ▼                 ▼
-┌──────────────────────────────────────────────────────────────────┐
-│          YOUR WINDOWS SERVER (RTX 5090 32GB, 64GB RAM)           │
-│                                                                  │
-│  ┌────────────────────────┐  ┌────────────────────────────────┐  │
-│  │   vLLM CodeLlama-13B   │  │    Supabase Stack (Port 8000)  │  │
-│  │  Port 8001 (RTX 5090)  │  │    PostgreSQL on Port 5432     │  │
-│  │  OpenAI-compatible API │  │    Auth, Studio, REST API      │  │
-│  └────────────────────────┘  └────────────────────────────────┘  │
-│  ┌────────────────────────┐  ┌────────────────────────────────┐  │
-│  │   Judge0 Code Engine   │  │   Cloudflare Tunnel Container  │  │
-│  │  Port 2358 (Isolated)  │  │   Zero-Config HTTPS Ingress    │  │
-│  │  Executes Python/C++/JS│  │   No Router Port-Forwarding    │  │
-│  └────────────────────────┘  └────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────┘
-```
+| Thing | Where you get it | Cost |
+|---|---|---|
+| The server PC (RTX 5090, 32GB VRAM) | already yours | ₹0 |
+| A USB stick / LAN transfer (~15 GB: repo + model weights move later) | — | ₹0 |
+| Admin access to the server PC | the owner | — |
+| Vercel account (you have it) | vercel.com | Free |
+| GitHub repo (you have it) | github.com | Free |
+| Monitor + keyboard for first login | — | — |
 
----
+### Step 1 — Install the two big things on the server (~30 min)
 
-## 2. Prerequisites on Windows
+1. **NVIDIA driver** (lets the GPU be used):
+   - Download "GeForce/RTX driver" from nvidia.com/drivers for the 5090 (Windows).
+   - Install → restart PC.
+   - Verify: open PowerShell, type `nvidia-smi` → you should see the GPU + "32GB" (or similar). **If this fails, STOP — nothing else will work.**
+2. **Docker Desktop for Windows**:
+   - docker.com → Download for Windows → install (accept WSL2 prompt).
+   - Start it, wait for the whale icon → "running".
+   - Accept the service agreement dialog on first run.
 
-### A. NVIDIA Drivers (Windows)
-You **do not** need to install any Linux toolkits on Windows. NVIDIA drivers provide direct CUDA passthrough to Docker via WSL 2 out of the box.
-- Make sure you have the latest NVIDIA drivers installed via **GeForce Experience** or [nvidia.com/drivers](https://www.nvidia.com/download/index.aspx).
+> Keep the PC plugged into power, Windows power plan = "Never sleep" while
+> serving (Settings → System → Power → Screen and sleep → Never).
 
-### B. Docker Desktop (Windows)
-1. Download & install [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/).
-2. Open Docker Desktop $\rightarrow$ Click **Settings (gear icon)** at top right.
-3. Under **General**, verify **"Use the WSL 2 based engine"** is checked.
-4. Under **Resources > WSL Integration**, enable integration with your default WSL distro.
+### Step 2 — Copy the project to the server (~10 min)
 
-### C. Verify GPU in Windows PowerShell
-Open **PowerShell** and run:
-```powershell
-docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi
-```
-> **Expected output**: A table showing `NVIDIA GeForce RTX 5090`, Driver version, and `32768MiB` VRAM.
+Pick ONE way:
+- **Easiest:** on the server, install Git (git-scm.com), open PowerShell:
+  ```powershell
+  cd C:\
+  git clone https://github.com/Sharveswar007/CareerPath.git
+  ```
+- Or: copy the whole project folder from your laptop via USB/LAN.
 
-*(💡 If PowerShell says `docker: The term 'docker' is not recognized`, run:)*
-```powershell
-$env:PATH = "C:\Users\$($env:USERNAME)\AppData\Local\Programs\DockerDesktop\resources\bin;$env:PATH"
-```
+Everything the server needs lives in the **`server/`** folder.
 
----
-
-## 3. Folder Setup on Windows
-
-Open **PowerShell as Administrator** and create a clean root directory for your server components:
+### Step 3 — Start everything the first time (~20–40 min, mostly model download)
 
 ```powershell
-New-Item -ItemType Directory -Force -Path "C:\CareerPath-Server\vllm"
-New-Item -ItemType Directory -Force -Path "C:\CareerPath-Server\supabase"
-New-Item -ItemType Directory -Force -Path "C:\CareerPath-Server\judge0"
-New-Item -ItemType Directory -Force -Path "C:\CareerPath-Server\hf-cache"
+cd C:\CareerPath
+powershell -ExecutionPolicy Bypass -File server\start-all.ps1
 ```
 
----
+This starts, in order: Judge0 (code runner), vLLM (AI — downloads the 13B
+model ~8 GB **once**, then caches it), Supabase (database + login), and the
+Cloudflare tunnels (public URLs).
 
-## Step 1: Deploy vLLM CodeLlama-13B (GPU Accelerated)
+⚠️ **First start is slow (model download). Later daily starts are 3–5 min.**
 
-vLLM utilizes the RTX 5090's **32GB VRAM** and massive memory bandwidth to serve CodeLlama-13B-Instruct (AWQ 4-bit) with continuous batching. Realistic ceiling for this model: **~15-20 concurrent active generations** (its no-GQA architecture saturates the KV cache quickly; `--max-num-seqs 32` is the hard cap).
+When it finishes, it prints "Done. Next steps".
 
-### 1. Model (final choice): CodeLlama-13B-Instruct (AWQ 4-bit)
-- Repo: **`TheBloke/CodeLlama-13B-Instruct-AWQ`** — open access (no HF token needed), ~8GB download.
-- AWQ 4-bit leaves ~20GB of the 32GB VRAM for KV cache — the only practical way a 13B fits this workload on one card.
-- vLLM enforces `response_format: json_object` server-side (guided decoding), so the app's quiz/resume JSON parsing keeps working even though CodeLlama's native JSON discipline is weaker.
-- Swapping models later is one command (e.g. to `Qwen/Qwen3-14B-FP8` for ~3x concurrency and stronger general quality).
+### Step 4 — Create the database tables (~5 min)
 
-### 2. Start vLLM in PowerShell:
-Run the following in PowerShell (replace `your_hf_token_here` with your Hugging Face token if using Llama):
+1. In the server browser open: **http://localhost:8000** (Supabase Studio).
+   - Login: see `server/supabase/docker/.env` → `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD`.
+2. Left menu → **SQL Editor** → **New query**.
+3. Open `C:\CareerPath\supabase\schema.sql` in Notepad, **Select All → Copy** → paste into the SQL editor → **Run**.
+   - Safe to re-run any time (it's idempotent). It creates all tables, login
+     security (RLS), the avatars storage bucket, and 3 demo coding challenges.
+
+### Step 5 — Get the public URLs and point Vercel at them (~5 min)
 
 ```powershell
-docker run -d --name vllm `
-  --restart unless-stopped `
-  --gpus all `
-  --ipc=host `
-  -p 8001:8000 `
-  -v "C:\CareerPath-Server\hf-cache:/root/.cache/huggingface" `
-  vllm/vllm-openai:latest `
-  --model TheBloke/CodeLlama-13B-Instruct-AWQ `
-  --served-model-name careerpath-ai `
-  --max-model-len 8192 `
-  --max-num-seqs 32 `
-  --gpu-memory-utilization 0.92 `
-  --kv-cache-dtype fp8
+powershell -ExecutionPolicy Bypass -File server\tunnel\get-tunnel-urls.ps1
 ```
 
-### 3. Monitor First-Time Model Download:
-```powershell
-docker logs -f vllm
-```
-*(On first run, vLLM will download the AWQ weights (~8GB) to `C:\CareerPath-Server\hf-cache`. Once ready, you will see `Route: /v1/chat/completions, Methods: POST`).*
+You'll get 3 URLs like `https://random-words.trycloudflare.com`. Note them.
 
-### 4. Test vLLM via PowerShell:
-```powershell
-$body = @{
-    model = "careerpath-ai"
-    messages = @(
-        @{ role = "user"; content = "Give me 1 career tip for a software engineer." }
-    )
-} | ConvertTo-Json
-
-Invoke-RestMethod -Uri "http://localhost:8001/v1/chat/completions" -Method Post -ContentType "application/json" -Body $body
-```
-> If this returns an AI response, **vLLM is running at full speed on your RTX 5090!**
-
----
-
-## Step 2: Deploy Self-Hosted Supabase
-
-Supabase runs PostgreSQL, GoTrue Authentication, Storage, and Supabase Studio on your PC.
-
-### 1. Clone Supabase Docker Configuration:
-```powershell
-cd C:\CareerPath-Server
-git clone --depth 1 https://github.com/supabase/supabase
-Rename-Item -Path "C:\CareerPath-Server\supabase\docker" -NewName "supabase-docker"
-cd C:\CareerPath-Server\supabase\supabase-docker
-Copy-Item .env.example .env
-```
-
-### 2. Configure Passwords in `.env`:
-Open `C:\CareerPath-Server\supabase\supabase-docker\.env` in VS Code or Notepad:
-- Set `POSTGRES_PASSWORD=YourStrongDatabasePassword123!`
-- Set `JWT_SECRET=YourSuperSecretKeyWithAtLeast32Chars123!`
-- You can leave the default pre-filled `ANON_KEY` and `SERVICE_ROLE_KEY` for initial setup.
-
-### 3. Start Supabase Containers:
-```powershell
-docker compose up -d
-```
-*(This starts PostgreSQL on port `5432`, Kong API Gateway on port `8000`, and Supabase Studio on port `8000`).*
-
-### 4. Apply Database Tables & Schema:
-1. Open your browser on Windows and navigate to: **[http://localhost:8000](http://localhost:8000)** (Supabase Studio).
-2. Click **SQL Editor** in the left sidebar.
-3. Click **New Query**.
-4. Open [`supabase/schema.sql`](./supabase/schema.sql) from your CareerPath repo, copy all SQL lines, paste into the query window, and click **Run**.
-5. All 9 tables (`profiles`, `coding_challenges`, `user_assessments`, etc.) are now created with RLS security policies!
-
----
-
-## Step 3: Deploy Judge0 Code Sandbox
-
-Judge0 compiles and executes student code (Python, C++, Java, JavaScript) inside secure sandboxed Docker containers.
-
-### 1. Download Official Judge0 Files:
-```powershell
-cd C:\CareerPath-Server\judge0
-
-curl.exe -sL https://github.com/judge0/judge0/releases/download/v1.13.1/docker-compose.yml -o docker-compose.yml
-curl.exe -sL https://github.com/judge0/judge0/releases/download/v1.13.1/judge0.conf -o judge0.conf
-```
-
-### 2. Configure `judge0.conf` for Windows WSL2:
-Open `C:\CareerPath-Server\judge0\judge0.conf` in Notepad.
-Find and verify these two parameters are set to `true` (required to run under Windows WSL2 cgroups v2):
-```ini
-ENABLE_PER_PROCESS_AND_THREAD_TIME_LIMIT=true
-ENABLE_PER_PROCESS_AND_THREAD_MEMORY_LIMIT=true
-```
-*(Also set a custom `REDIS_PASSWORD` and `POSTGRES_PASSWORD` in `judge0.conf` and `docker-compose.yml`).*
-
-### 3. Start Judge0:
-```powershell
-docker compose up -d db redis
-Start-Sleep -Seconds 10
-docker compose up -d
-```
-
-### 4. Verify Judge0 in PowerShell:
-```powershell
-Invoke-RestMethod -Uri "http://localhost:2358/system_info"
-```
-> Returns system version: `1.13.1`. Judge0 is live!
-
----
-
-## Step 4: Connect Windows Services to Vercel via Cloudflare Tunnel
-
-> 💡 **Why this is necessary**: Vercel's servers live in AWS cloud data centers. They cannot call `http://localhost:8000` on your Windows PC.
-> A **Cloudflare Tunnel** connects your local Windows ports to the internet with **free HTTPS domains**, without modifying your home Wi-Fi router or exposing your home IP!
-
-### 1. Setup Cloudflare Tunnel:
-1. Go to [dash.cloudflare.com](https://dash.cloudflare.com/) (Sign up for a free account if you haven't).
-2. Go to **Zero Trust** $\rightarrow$ **Networks** $\rightarrow$ **Tunnels**.
-3. Click **Create a Tunnel**. Name it `careerpath-windows`.
-4. Under "Choose your environment", select **Docker**.
-5. Cloudflare will give you a single command with a token. Run that command in Windows PowerShell:
-   ```powershell
-   docker run -d --name cloudflared --restart unless-stopped cloudflare/cloudflared:latest tunnel --no-autoupdate run --token YOUR_CLOUDFLARE_TOKEN
-   ```
-
-### 2. Add the 3 Public Hostnames in the Cloudflare Dashboard:
-In the Tunnel settings under **Public Hostnames**, add these 3 routes:
-
-| Public Hostname | Service Type | URL on Windows |
-| :--- | :--- | :--- |
-| `supabase.yourdomain.com` | `HTTP` | `host.docker.internal:8000` |
-| `vllm.yourdomain.com` | `HTTP` | `host.docker.internal:8001` |
-| `judge0.yourdomain.com` | `HTTP` | `host.docker.internal:2358` |
-
-*(Note: `host.docker.internal` allows the cloudflared Docker container to reach your Windows ports).*
-
-Now, test in your Windows browser:
-- `https://supabase.yourdomain.com` $\rightarrow$ Opens your local Supabase Studio securely from the internet!
-- `https://judge0.yourdomain.com/system_info` $\rightarrow$ Returns Judge0 status!
-- `https://vllm.yourdomain.com/v1/models` $\rightarrow$ Returns your CodeLlama model!
-
----
-
-## Step 5: Deploy CareerPath on Vercel
-
-### 1. Push Your Code to GitHub:
-Make sure your latest code is pushed to your GitHub repository:
-```powershell
-cd d:\coding\CareerPath
-git push origin main
-```
-
-### 2. Import into Vercel:
-1. Go to [vercel.com/new](https://vercel.com/new).
-2. Select your repository `CareerPath`.
-3. Framework Preset: **Next.js**.
-
-### 3. Add Environment Variables in Vercel:
-Under **Environment Variables**, paste the following keys using your new Cloudflare HTTPS domains:
+Then in **vercel.com** → your project → **Settings → Environment Variables**,
+set (copy values exactly from `server/README.md` Step 6 — tokens included):
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=https://supabase.yourdomain.com
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_from_env_file
-
-AI_BASE_URL=https://vllm.yourdomain.com/v1
+NEXT_PUBLIC_SUPABASE_URL=https://<supabase-tunnel-url>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<from server/supabase/docker/.env, line ANON_KEY>
+AI_BASE_URL=https://<vllm-tunnel-url>/v1
+AI_API_KEY=cp-vllm-4f9d2a81c67b45e3a2d80f19c3e75b64
 AI_MODEL=careerpath-ai
-GROQ_API_KEY=dummy_build_key
-
-JUDGE0_URL=https://judge0.yourdomain.com
-
-TAVILY_API_KEY=your_tavily_key_if_used
+GROQ_API_KEY=dummy_not_used
+JUDGE0_URL=https://<judge0-tunnel-url>
+JUDGE0_AUTH_TOKEN=7e37040d8cc7bc9cba642dd84667aeac3b6248456b95e0f5
+SUPABASE_SERVICE_ROLE_KEY=<from .env, line SERVICE_ROLE_KEY>
 ```
 
-### 4. Deploy:
-Click **Deploy**. In ~1-2 minutes, Vercel will give you your live URL (e.g. `https://careerpath.vercel.app`).
+Then **Deployments → ⋯ → Redeploy**.
 
-### 5. Update Supabase Auth Redirects:
-In Supabase Studio (`https://supabase.yourdomain.com`):
-1. Go to **Authentication** $\rightarrow$ **URL Configuration**.
-2. Set **Site URL**: `https://careerpath.vercel.app`
-3. In **Redirect URLs**, add: `https://careerpath.vercel.app/auth/callback`
+Also in Supabase Studio → Authentication → URL Configuration:
+Site URL = your Vercel URL, Redirect URLs += `<your-vercel-url>/auth/callback`.
+
+### Step 6 — Prove it all works (~10 min)
+
+```powershell
+# on the server:
+powershell -ExecutionPolicy Bypass -File server\smoke-test.ps1      # want 6/6 PASS
+powershell -ExecutionPolicy Bypass -File server\golden-set.ps1      # want >= 80%
+powershell -ExecutionPolicy Bypass -File server\load-test.ps1 -Users 65   # the big one
+```
+
+Then in any browser (your phone, on mobile data — proves the public path):
+1. Open your Vercel URL → should load.
+2. Sign up a test account → should log in.
+3. Chat: send a message → words should stream out.
+4. Challenges: run any code → green result.
+5. Profile → upload a photo as avatar → appears.
+6. `/privacy` → (don't delete your real account; you already tested this).
+
+### Step 7 — Create demo accounts (~2 min)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File server\create-demo-accounts.ps1
+```
+Prints 3 emails + one shared password. Log in once with one of them.
+
+**✅ First-time setup complete. Everything after this is daily routine.**
 
 ---
 
-## Step 6: Verify the Complete System End-to-End
+## PART 2 — The daily 9-to-6 routine (your "simple easy way")
 
-Open your Vercel URL in your browser:
+### 🌅 Every morning (one command)
 
-1. **Test User Onboarding**:
-   - Create a student account and sign in.
-   - Verify user record appears in Supabase Studio $\rightarrow$ Table Editor $\rightarrow$ `profiles`.
-2. **Test AI Counseling & Quiz Generation**:
-   - Ask a question in Career Counseling Chat or generate an assessment.
-   - **Open Windows Task Manager $\rightarrow$ Performance $\rightarrow$ GPU (RTX 5090)**:
-     You will see GPU Compute spike to ~30-50% and VRAM stay at ~10GB while words stream into the browser with near-zero latency!
-3. **Test Code Sandbox**:
-   - Open a coding challenge and click **Run Code**.
-   - Judge0 executes the code and returns the test case results.
+```powershell
+powershell -ExecutionPolicy Bypass -File server\daily-start.ps1
+```
+
+It does everything and checks itself: Docker → all services → waits for the
+AI to load → prints today's URLs → **updates Vercel automatically** (asks for
+your project name once; if you don't have the Vercel CLI it prints the exact
+manual steps, takes 2 min) → gives you a READY / NOT-READY verdict.
+
+First run of the day: ~5 min (model reloads into GPU). If it says READY and
+`/api/health` says healthy — students can log in.
+
+### 🌆 Every evening (one command)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File server\stop-all.ps1
+```
+Stops everything, frees RAM/GPU, data stays safe on disk.
+
+### 📅 Weekly (Friday, 10 min)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File server\backup-db.ps1        # backup
+powershell -ExecutionPolicy Bypass -File server\backup-db.ps1 -Restore -File server\backups\<latest>.sql   # verify once
+docker system df          # if disk gets full: docker system prune -f
+```
+
+Full ops manual (fallbacks, diagnosis, demo-day checklist): **`RUNBOOK.md`**.
 
 ---
 
-## Daily Management & PC Restart Cheat Sheet
+## PART 3 — "Is everything free?" — full audit
 
-Because all containers use `--restart unless-stopped`, **when you restart your Windows PC, Docker Desktop will automatically restart all 4 services in the background!**
+**Short answer: yes, the whole system runs on ₹0/month as configured.** Details:
 
-Here is your quick PowerShell cheat sheet for maintenance:
+| Service | Used for | Free? | Notes |
+|---|---|---|---|
+| **Your server PC** | AI (vLLM), database (Supabase), code execution (Judge0), tunnels | ✅ your hardware | Electricity only |
+| **vLLM + CodeLlama-13B** | all AI features (chat, quiz, exams, assessment, resume analysis) | ✅ fully | Open weights, runs locally, no API cost, no rate limits. Model downloaded once |
+| **Cloudflare quick tunnels** | public URLs for the 3 services | ✅ fully | No account needed. Caveat: URLs change every restart (daily-start handles it) |
+| **Supabase (self-hosted)** | database, auth, storage | ✅ fully | Open source, runs in YOUR Docker |
+| **Judge0 (self-hosted)** | code execution | ✅ fully | Runs in YOUR Docker |
+| **Vercel (Hobby plan)** | hosts the website/app | ✅ free tier | Limits: 100 GB bandwidth/mo, serverless execution seconds. A college demo is far below this. Only real limit: **non-commercial use** — fine for a college project |
+| **GitHub** | code + CI | ✅ free tier | Public repo = free Actions minutes |
+| **Groq cloud** | automatic AI fallback if your server is down | ✅ free tier | Only used if `AI_BASE_URL` is removed; generous free limits, you're a backup user |
+| **Tavily** | real-time exam/trends news | ⚠️ free 1,000 credits/mo | App **auto-falls back to AI-generated content** when credits run out — nothing breaks |
+| **OCR.space** | scanned-PDF resume text extraction | ⚠️ free ~25k/mo | Only for scanned PDFs; typed PDFs skip it. App errors gracefully without a key |
+| **RapidAPI Judge0** | old cloud code-execution (legacy) | — | **Not used on the server path** (self-hosted Judge0 is). Key was leaked once — **rotate it on rapidapi.com anyway** |
+| **UptimeRobot (optional)** | outage emails | ✅ free tier | 50 monitors free |
 
-| Task | PowerShell Command |
-| :--- | :--- |
-| **Check all running services** | `docker ps` |
-| **Check GPU usage & VRAM** | `nvidia-smi` |
-| **Check vLLM AI generation logs** | `docker logs -f vllm` |
-| **Check Judge0 execution logs** | `cd C:\CareerPath-Server\judge0; docker compose logs -f` |
-| **Check Supabase database logs** | `cd C:\CareerPath-Server\supabase\supabase-docker; docker compose logs -f` |
-| **Restart vLLM** | `docker restart vllm` |
-| **Stop all services temporarily** | `docker stop vllm cloudflared; cd C:\CareerPath-Server\judge0; docker compose down; cd C:\CareerPath-Server\supabase\supabase-docker; docker compose down` |
-| **Start all services** | `docker start vllm cloudflared; cd C:\CareerPath-Server\judge0; docker compose up -d; cd C:\CareerPath-Server\supabase\supabase-docker; docker compose up -d` |
+⚠️ The ONLY ways you could ever pay:
+1. **Vercel Pro** — only if you exceed free bandwidth (a college demo won't).
+2. Someone ramps `TAVILY_API_KEY` usage — impossible to exceed silently; free tier just stops, app falls back.
+3. Domain for named tunnel (~₹500/**year**, optional but recommended for stable URLs).
+
+**Conclusion: you can run this 9–6 every day, all year, for ₹0** (+ optional ₹500/yr domain).
+
+---
+
+## PART 4 — Things that WILL require attention (honest list)
+
+| Thing | Reality | Handling |
+|---|---|---|
+| **Tunnel URLs change every morning** | Quick tunnels are random per start | `daily-start.ps1` auto-updates Vercel (~1 min). For permanent URLs: named tunnel + ₹500/yr domain |
+| **6+ hrs/day uptime on your PC** | Heat, dust, Windows updates | RUNBOOK §4: pause Windows Update, "Never sleep", UPS if possible |
+| **65 concurrent users** | Unproven until you run it on the real GPU | `load-test.ps1 -Users 65` in Step 6 — if it fails, raise `--max-num-seqs` (RUNBOOK §5) |
+| **College network may block trycloudflare** | Some networks filter it | Test on day 1; fallback = phone hotspot (RUNBOOK §4) |
+| **First AI request of the day is slow (~30–60 s)** | Model warms up | Do one test chat in the morning checklist — students never see it |
+| **Disk fills slowly** (Docker logs/images) | Weeks of uptime | Weekly `docker system df` + `prune` (PART 2) |
+
+---
+
+## PART 5 — When something breaks (fast map)
+
+| Symptom | First thing to do |
+|---|---|
+| daily-start says Docker not running | Start Docker Desktop, re-run script |
+| A service fails to start | `docker ps -a` → find the restarted/exited one → `docker logs <name>` |
+| App loads but AI errors | RUNBOOK §0: clear `AI_BASE_URL` in Vercel → Redeploy → instant Groq fallback; fix GPU after |
+| Everything down at 9 AM | Re-run `daily-start.ps1` (idempotent) |
+| Something else | Open **`RUNBOOK.md`** — it has the full diagnosis map |
+
+---
+
+## Quick reference card (print this)
+
+```powershell
+# FIRST TIME (once)
+git clone https://github.com/Sharveswar007/CareerPath.git ; cd CareerPath
+powershell -ExecutionPolicy Bypass -File server\start-all.ps1
+# Studio localhost:8000 -> SQL -> paste supabase/schema.sql -> Run
+# get-tunnel-urls.ps1 -> Vercel env -> Redeploy  (server/README.md Step 6)
+server\smoke-test.ps1 ; server\golden-set.ps1 ; server\load-test.ps1 -Users 65
+server\create-demo-accounts.ps1
+
+# EVERY MORNING 9 AM
+powershell -ExecutionPolicy Bypass -File server\daily-start.ps1
+
+# EVERY EVENING 6 PM
+powershell -ExecutionPolicy Bypass -File server\stop-all.ps1
+
+# WEEKLY FRIDAY
+powershell -ExecutionPolicy Bypass -File server\backup-db.ps1
+```

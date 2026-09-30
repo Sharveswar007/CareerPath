@@ -206,7 +206,8 @@ powershell -ExecutionPolicy Bypass -File server\create-demo-accounts.ps1
 | Health check | `curl https://<vercel-url>/api/health` |
 | DB backup | `powershell -File server\backup-db.ps1` |
 | Restart AI | `docker restart vllm` |
-| Start everything | `powershell -File server\start-all.ps1` |
+| Start everything (first time / manual) | `powershell -File server\start-all.ps1` |
+| **DAILY START (9 AM — does everything incl. Vercel update)** | `powershell -File server\daily-start.ps1` |
 | Stop everything | `powershell -File server\stop-all.ps1` |
 
 Reboots: containers use restart policies, so with Docker Desktop set to start on

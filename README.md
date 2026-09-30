@@ -429,6 +429,7 @@ Concurrency load testing (65 users) runs on the GPU server via
 
 ### Operations
 
+- 🚀 **Deploying to the server (complete layman guide, daily 9–6 routine, cost audit)** → [SERVER_DEPLOYMENT_GUIDE.md](./SERVER_DEPLOYMENT_GUIDE.md)
 - 🚨 **Something broke?** → [RUNBOOK.md](./RUNBOOK.md) — 60-second fallbacks,
   daily checks, diagnosis map, weekly maintenance, demo-day checklist
 - 🛠️ **Server setup** → [server/README.md](./server/README.md) — layman steps 1–9

@@ -211,3 +211,29 @@ function) + trigger wrapper + RPC wrapper; both deletion paths re-verified.
 `src/lib/supabase/admin.ts`, `src/lib/ai/dedupe.ts` (+7 tests, 21 total),
 `src/lib/obs/request-id.ts` (wired into 4 routes), `AI_TIMEOUT_MS` knob,
 idempotent schema + seed data.
+
+### 8.1 Storage + auth deep verification (Sep 30)
+
+| # | Test | Result |
+|---|---|---|
+| S1 | Auth: two users signup, tokens issued, profile trigger rows created | ✅ |
+| S2 | Data: insert via REST (201), owner reads own row | ✅ |
+| S3 | RLS isolation: user B cannot read or delete user A's rows | ✅ |
+| S4 | Storage: upload to own `avatars/<uid>/` folder (200) | ✅ |
+| S5 | Storage: upload into ANOTHER user's folder blocked by RLS (400) | ✅ |
+| S6 | Storage: anonymous public read of avatar (200) | ✅ |
+| S7 | Delete: RPC as service_role wipes auth+profile+chat (204); anon/authenticated EXECUTE revoked (`permission denied`) | ✅ |
+
+**Bugs found & fixed:**
+1. **`avatars` bucket did not exist** — profile-page avatar upload would have
+   failed on a fresh server. Bucket + read/insert/update policies added to
+   `schema.sql` (per-user folder isolation via `storage.foldername`).
+2. **Upload path mismatch** — the app wrote to `avatars/<uid>-<ts>.png`
+   (bucket root) but the policy scopes writes to `avatars/<uid>/...`; app now
+   uploads inside the user's own folder.
+3. **Supabase re-grants EXECUTE on functions** to anon/authenticated — the
+   delete RPC was callable by any logged-in user against any target. Schema now
+   revokes both roles explicitly.
+4. **Storage blocks direct SQL deletes** on `storage.objects` — avatar files
+   are now removed by the delete route via the Storage API (best-effort) with
+   the SQL path removed.

@@ -390,9 +390,11 @@ export default function ProfilePage() {
 
         setUploadingAvatar(true);
         try {
-            // Create unique file name
+            // Create unique file name. Upload INSIDE the user's own storage
+            // folder: the avatars RLS policy only allows writes under
+            // avatars/<auth-user-id>/ (and delete_user_data cleans it up).
             const fileExt = file.name.split(".").pop();
-            const fileName = `${profile.id}-${Date.now()}.${fileExt}`;
+            const fileName = `${profile.id}/${Date.now()}.${fileExt}`;
 
             // Upload to Supabase Storage
             const { error: uploadError } = await supabase.storage

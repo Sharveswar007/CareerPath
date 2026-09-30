@@ -455,6 +455,9 @@ begin
   delete from coding_challenges  where user_id = target;
   delete from test_sessions      where student_id = target;
   delete from test_results       where student_id = target;
+  -- NOTE: avatar files in storage.objects are deleted by the APP via the
+  -- Storage API (direct SQL deletes on storage tables are blocked by design).
+  -- See src/app/api/account/delete/route.ts.
 end;
 $$;
 
@@ -484,6 +487,8 @@ $$;
 
 -- only the service role may call these functions directly
 revoke all on function public.delete_user_data(uuid) from public;
+revoke all on function public.delete_user_data(uuid) from anon;
+revoke all on function public.delete_user_data(uuid) from authenticated;
 grant execute on function public.delete_user_data(uuid) to service_role;
 
 -- safety net: even a manual delete in Studio cleans up owned rows first
@@ -491,6 +496,40 @@ drop trigger if exists on_auth_user_delete on auth.users;
 create trigger on_auth_user_delete
   before delete on auth.users
   for each row execute procedure public.cleanup_user_rows();
+
+-- =====================================================
+-- Storage: avatars bucket (used by the profile page uploader)
+-- =====================================================
+-- insert into storage.buckets (id, name, public) is idempotent by primary key
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+-- public read of avatars
+drop policy if exists "Avatar public read" on storage.objects;
+create policy "Avatar public read"
+  on storage.objects for select
+  using ( bucket_id = 'avatars' );
+
+-- signed-in users may upload/update only inside their own folder:
+--   avatars/<their-user-id>-<timestamp>.<ext>  (matches profile/page.tsx)
+drop policy if exists "Avatar own-folder write" on storage.objects;
+create policy "Avatar own-folder write"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'avatars'
+    and auth.role() = 'authenticated'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "Avatar own-folder update" on storage.objects;
+create policy "Avatar own-folder update"
+  on storage.objects for update
+  using (
+    bucket_id = 'avatars'
+    and auth.role() = 'authenticated'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
 
 -- =====================================================
 -- Demo seed data (idempotent - safe to re-run)

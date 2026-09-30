@@ -79,7 +79,20 @@ export async function POST(request: NextRequest) {
 
         const admin = createAdminClient();
 
-        // 1. wipe owned rows + the auth user (SECURITY DEFINER SQL function)
+        // 1. delete avatar files via the Storage API (direct SQL deletes on
+        //    storage.tables are blocked by supabase storage by design)
+        try {
+            const { data: files } = await admin.storage.from("avatars").list(user.id);
+            if (files && files.length > 0) {
+                await admin.storage
+                    .from("avatars")
+                    .remove(files.map((f) => `${user.id}/${f.name}`));
+            }
+        } catch {
+            // storage cleanup is best-effort; account deletion continues
+        }
+
+        // 2. wipe owned rows + the auth user (SECURITY DEFINER SQL function)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- rpc not in generated types yet
         const { error: rpcError } = await (admin as any).rpc("delete_user_data", {
             target: user.id,
@@ -92,7 +105,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 2. clear the session cookies (user row is gone; local session is stale)
+        // 3. clear the session cookies (user row is gone; local session is stale)
         await supabase.auth.signOut();
 
         logEvent(requestId, "delete.success", { userId: user.id });

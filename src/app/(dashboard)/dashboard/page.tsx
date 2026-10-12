@@ -21,8 +21,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { FloatingOrbs } from "@/components/effects/floating-orbs";
-import { ScrollReveal } from "@/components/effects/scroll-reveal";
+import { FloatingOrbs } from "@/components/effects";
+import { ScrollReveal } from "@/components/effects";
 
 const containerVariants = {
     hidden: { opacity: 0 },

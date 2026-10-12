@@ -13,9 +13,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Pass public environment variables needed at build time
-ARG NEXT_PUBLIC_SUPABASE_URL=https://wnqzcangvuujkbiwznze.supabase.co
-ARG NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InducXpjYW5ndnV1amtiaXd6bnplIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwMTkxOTYsImV4cCI6MjA4MTU5NTE5Nn0.SgCoAFZsB6i-sx8TyyCd3CFwU3AkbJXLLPwbiibgQqI
+# Pass PUBLIC environment variables needed at build time.
+# These MUST be provided by docker-compose build args or --build-arg
+# (see .env.campus for campus-mode values). Never bake cloud keys here.
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY

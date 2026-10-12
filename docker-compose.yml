@@ -4,8 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://wnqzcangvuujkbiwznze.supabase.co}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InducXpjYW5ndnV1amtiaXd6bnplIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwMTkxOTYsImV4cCI6MjA4MTU5NTE5Nn0.SgCoAFZsB6i-sx8TyyCd3CFwU3AkbJXLLPwbiibgQqI}
+        # compose substitutes from the .env file (Copy-Item .env.campus .env)
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
     container_name: careerpath-app
     ports:
       - "3000:3000"

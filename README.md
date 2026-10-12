@@ -381,7 +381,19 @@ The editor automatically detects languages based on syntax:
 
 ## 🚢 Deployment
 
-### Deploy to Vercel (Recommended)
+### Deploy on the college server — CAMPUS MODE (recommended for a college deploy)
+
+Everything runs on one machine inside the campus network: web app + Supabase +
+Judge0 + vLLM. No Vercel, no tunnels, no changing URLs. Students open
+`http://<SERVER-LAN-IP>:3000`.
+
+1. Clone the repo on the server, follow **[SERVER_DEV_README.md](./SERVER_DEV_README.md)**
+   step by step (layman-proof, includes firewall + static IP).
+2. Copy the env template and fill in 3 values: `Copy-Item .env.campus .env.local`.
+3. Start the stack, run `supabase/schema.sql` once via the included psql one-liner.
+4. `daily-start-campus.ps1` every 9 AM / `stop-all-campus.ps1` every 6 PM.
+
+### Deploy to Vercel (cloud alternative, for off-campus access)
 
 1. **Push to GitHub**
    ```bash
@@ -394,7 +406,7 @@ The editor automatically detects languages based on syntax:
    - Import your GitHub repository
 
 3. **Configure Environment Variables**
-   - Add all variables from `.env.local`
+   - Add all variables from `.env.local` (see `.env.example`)
 
 4. **Deploy**
    - Click Deploy and wait for the build
@@ -402,7 +414,9 @@ The editor automatically detects languages based on syntax:
 5. **Update Supabase**
    - Add your Vercel URL to Supabase Auth redirect URLs
 
-See [`DEPLOY.md`](./DEPLOY.md) for detailed deployment instructions.
+See [`DEPLOY.md`](./DEPLOY.md) and
+[`SERVER_DEPLOYMENT_GUIDE.md`](./SERVER_DEPLOYMENT_GUIDE.md) (tunnel mode)
+for detailed instructions.
 
 ---
 
@@ -447,12 +461,13 @@ Concurrency load testing (65 users) runs on the GPU server via
 | Limitation | Description |
 |------------|-------------|
 | **API Rate Limits** | Groq free tier has request limits |
-| **No Offline Mode** | Requires internet for all features |
+| **No Offline Mode** | Requires network for all features |
 | **English Only** | Currently supports English only |
 | **Web Only** | No native mobile apps |
 | **Resume Format** | Best results with PDF/TXT files |
 | **Code Timeout** | 15-second limit on execution |
 | **No Video Content** | Resources are links only |
+| **Campus Mode Reach** | LAN deployment is reachable only on the college network (ask IT about port-forwarding for off-campus) |
 
 ---
 

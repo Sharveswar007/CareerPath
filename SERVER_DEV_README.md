@@ -81,7 +81,24 @@ Everything else in `.env.local` is already correct. Save and close.
 > 💡 Shortcut: there is now a script that fills every IP for you —
 > see **PART 1.5** right below before editing anything by hand.
 
-### Step 5 — Open the firewall for students (⚠️ do not skip)
+### Step 5 — Port conflict? (only if IT says a port is taken)
+
+```powershell
+netstat -ano | findstr "LISTENING" | findstr ":3000 :8000 :2358"
+```
+
+Empty = all free, skip this section. Otherwise:
+
+| Port taken | Change | Then also |
+|---|---|---|
+| **3000** (website) | start with `daily-start-campus.ps1 -Port 4000` | firewall rule for 4000; **no rebuild** |
+| **8000** (Supabase) | `server\supabase\docker\.env` → `API_GW_HTTP_PORT=5000` (+ `KONG_HTTP_PORT=5000`) | `.env.local` + `SITE_URL` + `API_EXTERNAL_URL` ports → **rebuild** |
+| **2358** (Judge0) | `server\judge0\docker-compose.yml` → `"2359:2358"` | `.env.local` → `JUDGE0_URL=http://localhost:2359`; no rebuild |
+
+> The campus wizard reads the Supabase port from the template, so port
+> changes done before running it propagate automatically.
+
+### Step 6 — Open the firewall for students (⚠️ do not skip)
 
 Open **Windows Defender Firewall** → Inbound Rules → New Rule (do it twice):
 - Rule 1: Port → TCP → **3000** → Allow → (all profiles) → name "CareerPath Web"

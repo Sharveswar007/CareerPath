@@ -65,8 +65,13 @@ if (-not (Test-Path $supaDockerEnv)) {
 $anon  = (Select-String -Path $supaDockerEnv -Pattern "^ANON_KEY=(.+)$").Matches[0].Groups[1].Value
 $service = ((Select-String -Path $supaDockerEnv -Pattern "^SERVICE_ROLE_KEY=(.+)$").Line) -replace "^SERVICE_ROLE_KEY=", ""
 
-(Get-Content $envLocal -Raw) `
-    -replace "NEXT_PUBLIC_SUPABASE_URL=http://192\.168\.1\.50:8000", "NEXT_PUBLIC_SUPABASE_URL=http://${lanIp}:8000" `
+# honor a pre-configured non-default Supabase gateway port (API_GW_HTTP_PORT)
+$envLocalRaw = Get-Content $envLocal -Raw
+$dbPortMatch = $envLocalRaw | Select-String -Pattern "NEXT_PUBLIC_SUPABASE_URL=http://192\.168\.1\.50:(\d+)"
+$dbPort = if ($dbPortMatch) { $dbPortMatch.Matches[0].Groups[1].Value } else { "8000" }
+
+($envLocalRaw) `
+    -replace "NEXT_PUBLIC_SUPABASE_URL=http://192\.168\.1\.50:[0-9]+", "NEXT_PUBLIC_SUPABASE_URL=http://${lanIp}:$dbPort" `
     -replace "NEXT_PUBLIC_SUPABASE_ANON_KEY=.+", "NEXT_PUBLIC_SUPABASE_ANON_KEY=$anon" `
     -replace "SUPABASE_SERVICE_ROLE_KEY=.+", "SUPABASE_SERVICE_ROLE_KEY=$service" |
     Set-Content $envLocal -NoNewline

@@ -54,10 +54,7 @@ if (-not (Test-Path $supaDockerEnv)) {
     Copy-Item $supaExample $supaDockerEnv
 }
 $anon  = (Select-String -Path $supaDockerEnv -Pattern "^ANON_KEY=(.+)$").Matches[0].Groups[1].Value
-$service = (Select-String -Path $supaDockerEnv -Pattern "^SERVICE_ROLE_KEY=(.+)$").Matches[1].Groups[1].Value -replace "^SERVICE_ROLE_KEY=", ""
-# the SERVICE_ROLE_KEY line: match more robustly
-$serviceLine = (Select-String -Path $supaDockerEnv -Pattern "^SERVICE_ROLE_KEY=(.+)$").Line
-$service = $serviceLine -replace "^SERVICE_ROLE_KEY=", ""
+$service = ((Select-String -Path $supaDockerEnv -Pattern "^SERVICE_ROLE_KEY=(.+)$").Line) -replace "^SERVICE_ROLE_KEY=", ""
 
 (Get-Content $envLocal -Raw) `
     -replace "NEXT_PUBLIC_SUPABASE_URL=http://192\.168\.1\.50:8000", "NEXT_PUBLIC_SUPABASE_URL=http://${lanIp}:8000" `

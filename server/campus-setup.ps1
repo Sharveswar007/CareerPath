@@ -12,6 +12,12 @@
 # The Supabase .env is NOT in git (it holds secrets), so on a fresh clone it
 # does not exist - this wizard creates it from the provided .env.example.
 
+param(
+    # Optional: non-interactive use (automation, re-runs). When omitted the
+    # wizard asks interactively, as normal.
+    [string]$IpAddress
+)
+
 $ErrorActionPreference = "Stop"
 $root    = $PSScriptRoot
 $repoRoot = Split-Path $root -Parent
@@ -29,7 +35,10 @@ foreach ($nic in (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyCont
     }
 }
 Write-Host ""
-if ($detected) {
+if ($IpAddress) {
+    $lanIp = $IpAddress
+    Write-Host "  Using IP from -IpAddress: $lanIp" -ForegroundColor Green
+} elseif ($detected) {
     Write-Host "  Detected server LAN IP: $detected" -ForegroundColor Green
     $answer = Read-Host "  Use this IP? (Enter = yes, or type the correct one)"
     if ($answer) { $lanIp = $answer } else { $lanIp = $detected }

@@ -145,8 +145,13 @@ dev, it's a one-line diagnosis.)
 powershell -ExecutionPolicy Bypass -File server\smoke-test.ps1
 ```
 
-Want 8/8 PASS: vLLM up, vLLM generating on GPU, Judge0 up, Judge0 running
+Want 6/6 PASS: vLLM up, vLLM generating on GPU, Judge0 up, Judge0 running
 real code, Supabase API answering.
+
+> ℹ️ **`/api/health` says "degraded" with `ai: fetch failed` right after
+> start?** That is vLLM still loading the model into the GPU — it turns to
+> "model ready" on its own after a few minutes, and this health check only
+> treats Supabase + AI as critical. Judge0 shows its own status.
 
 ✅ **First-time setup complete.** Everything after this is daily routine.
 

@@ -62,7 +62,24 @@ Fill in:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` → from `server\supabase\docker\.env`, line `ANON_KEY=`
 - `SUPABASE_SERVICE_ROLE_KEY` → same file, line `SERVICE_ROLE_KEY=`
 
-Everything else in the file is already correct. Save and close.
+Then set Supabase's own URLs to the same server (login redirects rely on it):
+
+```powershell
+notepad server\supabase\docker\.env
+```
+
+In that file, set:
+- `SITE_URL=http://<YOUR-LAN-IP>:3000` (replace the sample IP in there)
+- also fix the `API_EXTERNAL_URL` value, if present, to `http://<YOUR-LAN-IP>:8000`
+
+> Why: this tells Supabase's login system which address the app lives on.
+> A stale value here causes "redirect fall-through" or email-link login
+> issues. Password login always works regardless.
+
+Everything else in `.env.local` is already correct. Save and close.
+
+> 💡 Shortcut: there is now a script that fills every IP for you —
+> see **PART 1.5** right below before editing anything by hand.
 
 ### Step 5 — Open the firewall for students (⚠️ do not skip)
 
@@ -72,6 +89,27 @@ Open **Windows Defender Firewall** → Inbound Rules → New Rule (do it twice):
 
 > Students' browsers connect to the web app (3000) AND directly to the
 > database gateway (8000). The AI and code runner stay private on localhost.
+
+---
+
+## PART 1.5 — One wizard instead of manual edits (easiest way)
+
+Run this instead of touching any .env files by hand — it asks for the LAN
+IP (auto-detects it) and fills `.env.local` AND Supabase's own config:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File server\campus-setup.ps1
+```
+
+It also prints the two firewall commands — run them in an **Administrator**
+PowerShell:
+
+```powershell
+netsh advfirewall firewall add rule name="CareerPath Web" dir=in action=allow protocol=TCP localport=3000
+netsh advfirewall firewall add rule name="CareerPath DB" dir=in action=allow protocol=TCP localport=8000
+```
+
+(Manual way — PART 1 Step 4 — still works if you prefer clicking.)
 
 ---
 
@@ -100,6 +138,15 @@ Get-Content supabase\schema.sql -Raw | docker exec -i supabase-db psql -U postgr
 Successful output ends with `INSERT 0 3`. (If it errors, re-run it once —
 it's safe to repeat. If it still fails, send the first error line to your
 dev, it's a one-line diagnosis.)
+
+**Prove it all works (defaults to localhost — campus-perfect):**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File server\smoke-test.ps1
+```
+
+Want 8/8 PASS: vLLM up, vLLM generating on GPU, Judge0 up, Judge0 running
+real code, Supabase API answering.
 
 ✅ **First-time setup complete.** Everything after this is daily routine.
 

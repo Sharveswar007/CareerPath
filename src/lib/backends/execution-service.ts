@@ -90,12 +90,15 @@ async function executeJavaNative(code: string, stdin: string = ""): Promise<Exec
     try {
         console.log("[ExecutionService] Executing Java natively");
         
-        // Create temporary file - Java requires specific filename format
-        tempFile = join(tmpdir(), `Code_${randomUUID()}.java`);
+        // Create temporary file - Java requires the file name to match the
+        // public class name, so derive ONE id and use it for both (a second
+        // randomUUID() here would never match and always fail javac).
+        const javaId = randomUUID().replace(/-/g, "");
+        tempFile = join(tmpdir(), `Code_${javaId}.java`);
         
         // Wrap code to make it a valid Java class
         const wrappedCode = `
-public class Code_${randomUUID().replace(/-/g, "")} {
+public class Code_${javaId} {
     public static void main(String[] args) {
         ${code}
     }

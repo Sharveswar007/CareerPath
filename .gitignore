@@ -45,3 +45,6 @@ lint-log.tmp.txt
 
 # local database backups (never commit)
 server/backups/
+
+# runtime logs from server scripts (daily-start transcripts, app-server output)
+server/logs/

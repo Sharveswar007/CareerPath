@@ -96,8 +96,8 @@ Write-Host "`n[4/5] Starting the web app on port $Port..." -ForegroundColor Yell
 $envFile = Join-Path $repoRoot ".env.local"
 if (-not (Test-Path $envFile)) {
     Write-Host "  MISSING .env.local next to the code." -ForegroundColor Red
-    Write-Host "  -> Copy the template:  Copy-Item .env.campus .env.local" -ForegroundColor Yellow
-    Write-Host "     then fill your server LAN IP + keys (see SERVER_DEV_README.md)." -ForegroundColor Yellow
+    Write-Host "  -> Copy the template:  Copy-Item server\env.campus.template .env.local" -ForegroundColor Yellow
+    Write-Host "     or run the wizard:    powershell -ExecutionPolicy Bypass -File server\campus-setup.ps1" -ForegroundColor Yellow
     Stop-Transcript | Out-Null
     exit 1
 }

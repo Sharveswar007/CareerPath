@@ -389,7 +389,7 @@ Judge0 + vLLM. No Vercel, no tunnels, no changing URLs. Students open
 
 1. Clone the repo on the server, follow **[SERVER_DEV_README.md](./SERVER_DEV_README.md)**
    step by step (layman-proof, includes firewall + static IP).
-2. Copy the env template and fill in 3 values: `Copy-Item .env.campus .env.local`.
+2. Copy the env template and fill in 3 values: `Copy-Item server\env.campus.template .env.local`.
 3. Start the stack, run `supabase/schema.sql` once via the included psql one-liner.
 4. `daily-start-campus.ps1` every 9 AM / `stop-all-campus.ps1` every 6 PM.
 

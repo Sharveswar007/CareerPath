@@ -53,7 +53,7 @@ cd CareerPath
 ### Step 4 — Configure the environment (3 values to fill)
 
 ```powershell
-Copy-Item .env.campus .env.local
+Copy-Item server\env.campus.template .env.local
 notepad .env.local
 ```
 
@@ -77,6 +77,13 @@ In that file, set:
 > issues. Password login always works regardless.
 
 Everything else in `.env.local` is already correct. Save and close.
+
+> 🔐 **Private credentials**: after cloning, place the **`.env.campus.local`**
+> file (private, gitignored — get it from the project owner's laptop/USB)
+> at the repo root, and the wizard in PART 1.5 fills ALL secret values for
+> you: the anon/service keys, the vLLM API key, and the Judge0 token. Without
+> it the things below still work using the repo's public placeholder pair,
+> but the private file is the proper way.
 
 > 💡 Shortcut: there is now a script that fills every IP for you —
 > see **PART 1.5** right below before editing anything by hand.
@@ -251,8 +258,9 @@ powershell -ExecutionPolicy Bypass -File server\daily-start-campus.ps1 -Build
 ```powershell
 # ONCE
 git clone https://github.com/Sharveswar007/CareerPath.git ; cd CareerPath
-Copy-Item .env.campus .env.local ; notepad .env.local   # fill 3 values
-# 2 firewall rules: TCP 3000 + TCP 8000
+Copy-Item X:\path\to\.env.campus.local .   # private creds file (from owner) - NEVER commit
+powershell -ExecutionPolicy Bypass -File server\campus-setup.ps1   # fills IPs + secrets
+# 2 firewall rules: TCP 3000 + TCP 8000 (wizard prints the commands)
 powershell -ExecutionPolicy Bypass -File server\daily-start-campus.ps1 -Build
 Get-Content supabase\schema.sql -Raw | docker exec -i supabase-db psql -U postgres -f /dev/stdin
 

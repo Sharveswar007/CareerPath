@@ -9,12 +9,30 @@ param(
     [string]$Model = "TheBloke/CodeLlama-13B-Instruct-AWQ",
     [int]$ContextLen = 8192,
     [int]$MaxSeqs = 32,
-    # API key so strangers cannot freeload the GPU through the tunnel.
-    # MUST match AI_API_KEY in Vercel environment variables.
-    [string]$ApiKey = "cp-vllm-4f9d2a81c67b45e3a2d80f19c3e75b64"
+    # API key so strangers cannot freeload the GPU. Left unset, it is read
+    # from the repo root's .env.local (AI_API_KEY, written by the campus
+    # setup wizard) or from .env.campus.local. MUST match AI_API_KEY in the
+    # app config or every AI call returns 401.
+    [string]$ApiKey = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $ApiKey) {
+    $repoRoot = Split-Path $PSScriptRoot -Parent | Split-Path -Parent
+    foreach ($f in @((Join-Path $repoRoot ".env.campus.local"), (Join-Path $repoRoot ".env.local"))) {
+        if (Test-Path $f) {
+            $hit = Select-String -Path $f -Pattern "^AI_API_KEY=(.+)$"
+            if ($hit) { $ApiKey = $hit.Matches[0].Groups[1].Value; break }
+        }
+    }
+}
+if (-not $ApiKey) {
+    Write-Host "No AI_API_KEY found (.env.campus.local / .env.local) - refusing to start vLLM without one." -ForegroundColor Red
+    Write-Host "Run  server\campus-setup.ps1  first, or pass  -ApiKey <key>." -ForegroundColor Yellow
+    exit 1
+}
+Write-Host "vLLM API key loaded (starts with: $($ApiKey.Substring(0, 8))...)."
 
 New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null
 

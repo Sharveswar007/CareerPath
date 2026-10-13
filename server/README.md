@@ -134,17 +134,17 @@ Vercel -> your project -> Settings -> Environment Variables:
 NEXT_PUBLIC_SUPABASE_URL=https://<supabase-tunnel-url>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key from supabase .env>
 AI_BASE_URL=https://<vllm-tunnel-url>
-AI_API_KEY=cp-vllm-4f9d2a81c67b45e3a2d80f19c3e75b64
+AI_API_KEY=<from your PRIVATE .env.campus.local — never commit that file>
 AI_MODEL=careerpath-ai
 GROQ_API_KEY=dummy_not_used
 JUDGE0_URL=https://<judge0-tunnel-url>
-JUDGE0_AUTH_TOKEN=7e37040d8cc7bc9cba642dd84667aeac3b6248456b95e0f5
+JUDGE0_AUTH_TOKEN=<from your PRIVATE .env.campus.local; must equal AUTHN_TOKEN in server\judge0\judge0.conf>
 SUPABASE_SERVICE_ROLE_KEY=<service_role key from supabase .env (line SERVICE_ROLE_KEY)>
 ```
 Both secrets must match their server-side values:
-`AI_API_KEY` = the `-ApiKey` used in `start-vllm.ps1`, and `JUDGE0_AUTH_TOKEN`
-= `AUTHN_TOKEN` in `server\judge0\judge0.conf`. The defaults above already
-do, so you can copy-paste this block as-is.
+`AI_API_KEY` = the API key vLLM was started with, and `JUDGE0_AUTH_TOKEN`
+= `AUTHN_TOKEN` in `server\judge0\judge0.conf`. `server\campus-setup.ps1`
+keeps all of these in sync when the private `.env.campus.local` is present.
 `SUPABASE_SERVICE_ROLE_KEY` is SERVER-ONLY (bypasses all database security);
 it enables the self-service account deletion on `/privacy`.
 Then Deployments -> Redeploy.

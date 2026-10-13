@@ -1,5 +1,13 @@
 # CareerPath — Complete Server Deployment Guide (Layman Edition)
 
+> 📌 **MODE CHECK — read this first.** This guide is the **tunnel mode**:
+> the app runs on Vercel and reaches the box via Cloudflare tunnels. The
+> default way to run the project today is **campus mode** (everything on the
+> college server, no Vercel, no tunnels) — that guide is
+> **`SERVER_DEV_README.md`**. Only use this file for off-campus/public access
+> setups. Private API keys live in a gitignored `.env.campus.local` on the
+> server (ask the project owner); this file intentionally shows placeholders.
+
 Every step from zero to students-using-it, plus the **daily 9-to-6 routine**,
 a full **"is anything paid?" audit**, and what to do when something breaks.
 Follow top to bottom. Don't skip steps marked ⚠️.
@@ -84,11 +92,11 @@ set (copy values exactly from `server/README.md` Step 6 — tokens included):
 NEXT_PUBLIC_SUPABASE_URL=https://<supabase-tunnel-url>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<from server/supabase/docker/.env, line ANON_KEY>
 AI_BASE_URL=https://<vllm-tunnel-url>   (no /v1 — the app adds its own paths)
-AI_API_KEY=cp-vllm-4f9d2a81c67b45e3a2d80f19c3e75b64
+AI_API_KEY=<from your PRIVATE .env.campus.local — never commit that file>
 AI_MODEL=careerpath-ai
 GROQ_API_KEY=dummy_not_used
 JUDGE0_URL=https://<judge0-tunnel-url>
-JUDGE0_AUTH_TOKEN=7e37040d8cc7bc9cba642dd84667aeac3b6248456b95e0f5
+JUDGE0_AUTH_TOKEN=<from your PRIVATE .env.campus.local; must equal AUTHN_TOKEN in server/judge0/judge0.conf>
 SUPABASE_SERVICE_ROLE_KEY=<from .env, line SERVICE_ROLE_KEY>
 ```
 

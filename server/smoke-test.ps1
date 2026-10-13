@@ -6,8 +6,20 @@ param(
     [string]$VllmUrl = "http://localhost:8001",
     [string]$Judge0Url = "http://localhost:2358",
     [string]$SupabaseUrl = "http://localhost:8000",
-    [string]$Judge0Token = "7e37040d8cc7bc9cba642dd84667aeac3b6248456b95e0f5"
+    [string]$Judge0Token = ""
 )
+
+# Judge0 token: explicit param wins; otherwise read .env.local / .env.campus.local
+if (-not $Judge0Token) {
+    $repoRoot = Split-Path $PSScriptRoot -Parent
+    foreach ($f in @((Join-Path $repoRoot ".env.local"), (Join-Path $repoRoot ".env.campus.local"))) {
+        if (Test-Path $f) {
+            $hit = Select-String -Path $f -Pattern "^JUDGE0_AUTH_TOKEN=(.+)$"
+            if ($hit) { $Judge0Token = $hit.Matches[0].Groups[1].Value; break }
+        }
+    }
+    if (-not $Judge0Token) { $Judge0Token = "campus-local-please-rotate-me" }
+}
 
 $pass = 0; $fail = 0
 

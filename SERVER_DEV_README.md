@@ -160,32 +160,38 @@ today's student URL for you).
 
 ---
 
-## PART 1.5 — Open ONE firewall port ⛔ (needs admin — ask IT once)
+## PART 1.5 — Reachability: the ONE thing that may need admin
 
-The only admin-requiring step. Students on the campus LAN need TCP **3000**
-allowed inbound. EITHER:
+Everything else in this guide is user-level. The ONLY open question is whether
+students' browsers can reach TCP port 3000. **Test FIRST, act second:**
 
-```powershell
-# paste into an Administrator PowerShell once:
-netsh advfirewall firewall add rule name="CareerPath Web" dir=in action=allow protocol=TCP localport=3000
-```
+1. Finish setup and start the app (PART 2) — it works on the server itself
+   (http://localhost:3000) even with no firewall change.
+2. From a STUDENT laptop (same campus WiFi) open `http://<server-ip>:3000`.
 
-OR: Windows Security → Firewall & network protection → Advanced settings →
-Inbound Rules → New Rule → Port → TCP 3000 → Allow → all profiles → name
-"CareerPath Web".
+**If it loads → nothing to do. Zero admin prompts, ever.** Someone else's
+rule or a permissive firewall profile already covers it.
 
-OR: send IT the one-liner above and ask them to run it.
+**If it fails to connect (timeout) → the port is blocked; pick ONE of these:**
 
-**Without this**, students cannot reach the server over LAN — but localhost
-(https://localhost:3000 on the server itself) still works, so you can finish
-setup first and open the port later.
+| Path | What you do | Admin needed? |
+|---|---|---|
+| **A. Ask IT (recommended)** | send them exactly this one line — 30 seconds for them, works forever: `netsh advfirewall firewall add rule name="CareerPath Web" dir=in action=allow protocol=TCP localport=3000` | no (they have it) |
+| **B. One-time admin access (yours)** | if you're ever given admin once: run the same command in an Administrator PowerShell (Right-click PowerShell → Run as administrator), or Windows Security → Firewall → Advanced settings → Inbound Rules → New Rule → Port → TCP 3000 → Allow → all profiles → name "CareerPath Web" | yes, once, never again |
+| **C. No admin available at all** | demo from the server itself (localhost:3000), or run Windows Mobile Hotspot on the server (Settings → Network → Mobile hotspot) and test whether students can join and load the site — hotspot networks sometimes still block inbound, so test it same day. Meanwhile keep asking IT for path A. | no, but not a guaranteed fallback |
+
+When admin IS needed in practice (installers only): NVIDIA driver,
+Docker Desktop, Node.js — and ONLY if they are not already installed. On this
+server other projects already run containers, so first check with `docker ps`
+and `node -v`; if both answer, you likely never see a single UAC prompt for
+this whole project.
 
 ### What needs admin (and what never does)
 
 | Task | Admin needed? | Notes |
 |---|---|---|
 | Copying files, all server scripts, Docker containers, all our ports | ❌ never | all user-level |
-| ONE inbound firewall rule (TCP 3000) | ⛔ yes / ask IT | only way students reach the server over LAN |
+| ONE inbound firewall rule (TCP 3000) — ONLY IF the test in PART 1.5 fails | ⛔ yes / ask IT | the only possible admin need, one time, forever after |
 | DHCP reservation for a stable IP | ⛔ IT only — but OPTIONAL | IP changes are harmless now; stable IP is just cosmetic |
 | "Never sleep" power plan | ❌ no | user setting |
 | Auto-start scheduled task (`register-autostart.ps1`) | ❌ usually not | optional convenience |
@@ -326,6 +332,39 @@ The plain morning command reuses the existing build.)
 | `server\backups\` | Friday database backups |
 | `server\logs\` | daily start/stop transcripts + app server log (gitignored) |
 | `.env.local`, `server\supabase\docker\.env`, `server\judge0\judge0.conf` | server-local configs filled by the wizard (never committed) |
+
+---
+
+## Deployment readiness — the complete file checklist
+
+Everything the repo needs is IN the repo (verified by the wizard's dry-runs).
+Only these two things must be placed onto the server manually:
+
+| # | On the server | Comes from | If missing |
+|---|---|---|---|
+| 1 | `C:\CareerPath\` project folder | `git clone` (Way A) or extracted ZIP (Way B) | nothing runs |
+| 2 | `C:\CareerPath\.env.campus.local` | owner's laptop (USB/LAN), repo root | wizard still runs with the public placeholder pair (offline-LAN-usable), but the private key set is the proper way — get it before Day 1 |
+
+Files the wizard creates on the server (do NOT edit by hand afterwards):
+
+| File | Created by | Restorable? |
+|---|---|---|
+| `.env.local` | wizard (Step 6) | yes — delete it and re-run the wizard |
+| `server\supabase\docker\.env` | wizard | yes — delete and re-run (DB password only applies on the DB volume's FIRST boot) |
+| `server\judge0\judge0.conf` (rotated token) | wizard | yes — re-run the wizard |
+
+**Sanity check before students walk in** (all from the repo root):
+
+```powershell
+Test-Path .env.campus.local, .env.local, server\supabase\docker\.env   # True, True, True
+powershell -ExecutionPolicy Bypass -File server\smoke-test.ps1           # want 6/6 PASS
+docker ps --format "{{.Names}}" | findstr careerpath-                     # our containers up
+```
+
+And the no-admin vs admin readiness in one line: the repo itself is
+admin-free; only firewall Path B in PART 1.5 needs an Administrator window,
+and only if Path A (IT one-liner) or the student-laptop test says it's
+necessary.
 
 ---
 

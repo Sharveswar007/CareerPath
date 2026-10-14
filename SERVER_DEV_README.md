@@ -13,10 +13,17 @@ Read top to bottom. Don't skip the ⚠️ steps.
 
 | Piece | What it is | Where it lives | Port |
 |---|---|---|---|
-| **Web app** | the site students open (Next.js) | Node.js, run by `npm start` | 3000 |
-| **Database + login** | accounts, scores, chat history (Supabase) | Docker containers | 8000 |
-| **AI** | chat/quiz/exam/resume answers (vLLM + CodeLlama-13B) | Docker container, GPU | 8001 |
-| **Code runner** | executes student code (Judge0) | Docker containers | 2358 |
+| **Web app** | the site students open (Next.js) | Node.js, run by `npm start` | **3000 (the ONLY port exposed)** |
+| **Database + login** | accounts, scores, chat history (Supabase) | Docker containers | 54321 - localhost only, reached through the app |
+| **AI** | chat/quiz/exam/resume answers (vLLM + CodeLlama-13B) | Docker container, GPU | 8001 - localhost only |
+| **Code runner** | executes student code (Judge0) | Docker containers | 2358 - localhost only |
+
+> One open port: students' browsers only ever talk to the web app (3000).
+> The database, AI and code runner are reached from localhost by the app
+> itself. And the stack is **other-project-safe**: every container is named
+> `careerpath-*`, the stop script never touches containers of other projects,
+> and the Supabase gateway moved to 54321 so port 8000 stays free for
+> whoever else is using it.
 
 One-time cost: **₹0/month forever** (all software free + your hardware).
 
@@ -42,41 +49,27 @@ git clone https://github.com/Sharveswar007/CareerPath.git
 cd CareerPath
 ```
 
-### Step 3 — Give the server a FIXED address (⚠️ do not skip)
+### Step 3 — Server IP (optional, not required)
 
-1. On the server run `ipconfig` → note the **IPv4 Address** (e.g. `192.168.1.50`).
-2. Ask college IT (or the router admin page) to **reserve that IP** for this
-   server (DHCP reservation / static IP).
-   > Why: this IP is baked into the app at build time. If the IP changes,
-   > students get a broken site until you rebuild.
+The app no longer contains any server IP - the IP can change any time (college
+WiFi/DHCP) and nothing breaks, no rebuild needed. Students use
+`http://<whatever-the-IP-is>:3000` and the morning start prints the exact URL
+for you. A DHCP reservation only makes the URL *stable-looking*, not
+functional - ask IT politely, don't fight for it.
 
 ### Step 4 — Configure the environment (3 values to fill)
 
 ```powershell
 Copy-Item server\env.campus.template .env.local
-notepad .env.local
 ```
 
-Fill in:
-- `NEXT_PUBLIC_SUPABASE_URL` → `http://<YOUR-LAN-IP>:8000` (replace the sample IP)
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` → from `server\supabase\docker\.env`, line `ANON_KEY=`
-- `SUPABASE_SERVICE_ROLE_KEY` → same file, line `SERVICE_ROLE_KEY=`
+`.env.local` needs NOTHING typed by hand when you use the wizard (PART 1.5):
 
-Then set Supabase's own URLs to the same server (login redirects rely on it):
+- `NEXT_PUBLIC_SUPABASE_URL` stays `/supa` (relative - no IP anywhere by design)
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` - the wizard
+  copies them out of `server\supabase\docker\.env` for you
+- gateway port is preset to 54321 (`SUPABASE_INTERNAL_URL=http://localhost:54321`)
 
-```powershell
-notepad server\supabase\docker\.env
-```
-
-In that file, set:
-- `SITE_URL=http://<YOUR-LAN-IP>:3000` (replace the sample IP in there)
-- also fix the `API_EXTERNAL_URL` value, if present, to `http://<YOUR-LAN-IP>:8000`
-
-> Why: this tells Supabase's login system which address the app lives on.
-> A stale value here causes "redirect fall-through" or email-link login
-> issues. Password login always works regardless.
-
-Everything else in `.env.local` is already correct. Save and close.
 
 > 🔐 **Private credentials**: after cloning, place the **`.env.campus.local`**
 > file (private, gitignored — get it from the project owner's laptop/USB)
@@ -91,7 +84,7 @@ Everything else in `.env.local` is already correct. Save and close.
 ### Step 5 — Port conflict? (only if IT says a port is taken)
 
 ```powershell
-netstat -ano | findstr "LISTENING" | findstr ":3000 :8000 :2358"
+netstat -ano | findstr "LISTENING" | findstr ":3000 :54321 :2358 :8001"
 ```
 
 Empty = all free, skip this section. Otherwise:
@@ -99,27 +92,45 @@ Empty = all free, skip this section. Otherwise:
 | Port taken | Change | Then also |
 |---|---|---|
 | **3000** (website) | start with `daily-start-campus.ps1 -Port 4000` | firewall rule for 4000; **no rebuild** |
-| **8000** (Supabase) | `server\supabase\docker\.env` → `API_GW_HTTP_PORT=5000` (+ `KONG_HTTP_PORT=5000`) | `.env.local` + `SITE_URL` + `API_EXTERNAL_URL` ports → **rebuild** |
+| **54321** (Supabase) | `server\supabase\docker\.env` → `API_GW_HTTP_PORT=<e.g. 5678>` | `SUPABASE_INTERNAL_URL` in `.env.local` - the wizard syncs it automatically; **rebuild if the bundle is stale** |
 | **2358** (Judge0) | `server\judge0\docker-compose.yml` → `"2359:2358"` | `.env.local` → `JUDGE0_URL=http://localhost:2359`; no rebuild |
+| **8001** (vLLM) | `start-vllm.ps1` → `-p 8111:8000` | `.env.local` → `AI_BASE_URL=http://localhost:8111`; no rebuild |
 
-> The campus wizard reads the Supabase port from the template, so port
-> changes done before running it propagate automatically.
+> The campus wizard reads the actual gateway port from the Supabase `.env`,
+> so port changes done before running it propagate automatically. All of
+> these except 3000 are localhost-only.
 
 ### Step 6 — Open the firewall for students (⚠️ do not skip)
 
-Open **Windows Defender Firewall** → Inbound Rules → New Rule (do it twice):
-- Rule 1: Port → TCP → **3000** → Allow → (all profiles) → name "CareerPath Web"
-- Rule 2: Port → TCP → **8000** → Allow → (all profiles) → name "CareerPath DB"
+ONE rule only (⛔ needs admin rights or college IT - see the admin list below):
+- Port → TCP → **3000** (or your `-Port` value) → Allow → (all profiles) → name "CareerPath Web"
 
-> Students' browsers connect to the web app (3000) AND directly to the
-> database gateway (8000). The AI and code runner stay private on localhost.
+> Students' browsers connect ONLY to the web app (3000). Database, AI and
+> code runner are never exposed. Without admin/IT approval students on the
+> campus LAN cannot reach the server (localhost still works) - options: ask
+> IT once, run the rule command once from an admin PowerShell, or demo from
+> a phone hotspot.
+
+### What needs admin rights (and what never does)
+
+| Task | Admin needed? | Why / what to do |
+|---|---|---|
+| Copying files, running every server script, Docker containers, ports above 1024 | ❌ never | All runtime work is user-level |
+| Opening the ONE inbound firewall port (TCP 3000) | ⛔ yes (or ask college IT) | Only way students reach the server over LAN |
+| DHCP reservation / static IP | ⛔ only IT can, but OPTIONAL | IP changes are harmless now; a stable IP is just cosmetic |
+| Windows "Never sleep" power plan | ❌ no (a user setting) | Settings → System → Power |
+| Auto-start scheduled task (`register-autostart.ps1`) | ❌ usually not (per-user task) | Optional convenience |
+
+Nothing in any server script attempts admin actions - if a script ever asks
+for elevation unexpectedly, that is a bug: stop and check first.
 
 ---
 
 ## PART 1.5 — One wizard instead of manual edits (easiest way)
 
-Run this instead of touching any .env files by hand — it asks for the LAN
-IP (auto-detects it) and fills `.env.local` AND Supabase's own config:
+Run this instead of touching any .env files by hand — no IP needed (the
+build is IP-independent now); it fills `.env.local`, all Supabase secrets
+and the Judge0 token from the private credential file:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File server\campus-setup.ps1
@@ -130,7 +141,6 @@ PowerShell:
 
 ```powershell
 netsh advfirewall firewall add rule name="CareerPath Web" dir=in action=allow protocol=TCP localport=3000
-netsh advfirewall firewall add rule name="CareerPath DB" dir=in action=allow protocol=TCP localport=8000
 ```
 
 (Manual way — PART 1 Step 4 — still works if you prefer clicking.)
@@ -156,7 +166,7 @@ The script:
 challenges). While containers are running, paste this into PowerShell:
 
 ```powershell
-Get-Content supabase\schema.sql -Raw | docker exec -i supabase-db psql -U postgres -f /dev/stdin
+Get-Content supabase\schema.sql -Raw | docker exec -i careerpath-db psql -U postgres -f /dev/stdin
 ```
 
 Successful output ends with `INSERT 0 3`. (If it errors, re-run it once —
@@ -198,8 +208,8 @@ your own phone (campus WiFi) once: login, chat, run one challenge.
 powershell -ExecutionPolicy Bypass -File server\stop-all-campus.ps1
 ```
 
-Stops everything, frees RAM/GPU. **Nothing is ever deleted** — all student
-data stays on disk and comes back next morning.
+Stops the app + all careerpath-* containers, frees RAM/GPU. Other projects on
+the same server are never touched. Nothing is ever deleted — all student data stays on disk and comes back next morning.
 
 ### 📅 Weekly (Friday, 5 min — your data's safety net)
 
@@ -228,9 +238,9 @@ Makes a full database backup to `server\backups\`. Keep the last 4+ files
 | daily-start-campus says Docker not running | Start Docker Desktop, re-run |
 | READY but health shows "degraded" | Look at the printed dependency lines; the failing one names the service: check with `docker logs <container>` |
 | students can't open the site at all | On a student laptop: `ping <SERVER-IP>` (firewall 3000 off?), on the server `netstat -ano | findstr :3000` (app stopped?) |
-| login works, chat doesn't | AI not loaded — `docker logs vllm`; also check `.env.local` has `AI_BASE_URL=http://localhost:8001` |
+| login works, chat doesn't | AI not loaded — `docker logs careerpath-vllm`; also check `.env.local` has `AI_BASE_URL=http://localhost:8001` |
 | everything down at 9 AM | Re-run `daily-start-campus.ps1` (safe to repeat) |
-| URL worked yesterday, broken today | someone changed a `.env.local` value or the server's IP changed — recheck Step 3/4 of PART 1, rebuild with `-Build` |
+| URL worked yesterday, broken today | someone changed a `.env.local` value — recheck PART 1 Step 4, rebuild with `-Build`. IP changes are harmless by design now |
 
 Full diagnosis: `RUNBOOK.md`.
 
@@ -260,9 +270,9 @@ powershell -ExecutionPolicy Bypass -File server\daily-start-campus.ps1 -Build
 git clone https://github.com/Sharveswar007/CareerPath.git ; cd CareerPath
 Copy-Item X:\path\to\.env.campus.local .   # private creds file (from owner) - NEVER commit
 powershell -ExecutionPolicy Bypass -File server\campus-setup.ps1   # fills IPs + secrets
-# 2 firewall rules: TCP 3000 + TCP 8000 (wizard prints the commands)
+# 1 firewall rule: TCP 3000 (wizard prints the command; needs admin/IT)
 powershell -ExecutionPolicy Bypass -File server\daily-start-campus.ps1 -Build
-Get-Content supabase\schema.sql -Raw | docker exec -i supabase-db psql -U postgres -f /dev/stdin
+Get-Content supabase\schema.sql -Raw | docker exec -i careerpath-db psql -U postgres -f /dev/stdin
 
 # EVERY MORNING 9 AM
 powershell -ExecutionPolicy Bypass -File server\daily-start-campus.ps1

@@ -36,10 +36,11 @@ Write-Host "vLLM API key loaded (starts with: $($ApiKey.Substring(0, 8))...)."
 
 New-Item -ItemType Directory -Force -Path $CacheDir | Out-Null
 
-# If an old container exists, replace it
-docker rm -f vllm 2>$null | Out-Null
+# If an old container exists, replace it (ONLY our own, careerpath-prefixed,
+# container - never touches other projects' containers)
+docker rm -f careerpath-vllm 2>$null | Out-Null
 
-docker run -d --name vllm `
+docker run -d --name careerpath-vllm `
   --restart unless-stopped `
   --gpus all `
   --ipc=host `
@@ -57,6 +58,6 @@ docker run -d --name vllm `
 Write-Host ""
 Write-Host "vLLM container started." -ForegroundColor Green
 Write-Host "First run downloads ~8GB of model weights into $CacheDir"
-Write-Host "Follow progress:   docker logs -f vllm"
+Write-Host "Follow progress:   docker logs -f careerpath-vllm"
 Write-Host "Ready when you see: Route: /v1/chat/completions, Methods: POST"
 Write-Host "Test afterwards:   http://localhost:8001/v1/models  (should list careerpath-ai)"

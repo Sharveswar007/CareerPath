@@ -34,7 +34,7 @@ before students notice. Set it up once (PENDING_TASKS.md §3).
 |---|---|
 | AI weird/empty answers | `docker logs cloudflared-vllm` (tunnel up?), `docker logs <vllm-container>` (OOM? crashed?), then `server\golden-set.ps1` — score ≥ 80% = model fine, bug is app-side |
 | Execution fails | `docker logs judge0` |
-| Login/signup broken | Supabase Studio (localhost:8000) → Auth → is it up? `docker logs supabase-auth` |
+| Login/signup broken | Studio (localhost:54321) → Auth → is it up? `docker logs careerpath-auth` |
 | App slow | `nvidia-smi` (GPU saturated?), `/api/health` → `ai` field latency |
 | Someone reports 429/503 | That's the rate limiter/concurrency cap working — see §5 to tune |
 

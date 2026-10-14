@@ -124,4 +124,4 @@ Line "challenges/run" $agg.runOk  $agg.runFail  $rs 30000
 Line "chat"       $agg.chatOk $agg.chatFail $cs 60000
 Write-Host "========================================================"
 Write-Host "Verdict thresholds: >=90% success AND avg latency within budget."
-Write-Host "If FAIL: check 'docker logs vllm' queue depth, lower --max-num-seqs, or accept queueing (vLLM queues rather than rejects)."
+Write-Host "If FAIL: check 'docker logs careerpath-vllm' queue depth, lower --max-num-seqs, or accept queueing (vLLM queues rather than rejects)."

@@ -11,7 +11,7 @@
 #   schtasks /Create /TN "CareerPath Backup" /SC DAILY /ST 02:30 /TR ^
 #     "powershell -ExecutionPolicy Bypass -File D:\path\to\CareerPath\server\backup-db.ps1"
 #
-# Requires Docker Desktop running (uses the supabase-db container's pg_dump).
+# Requires Docker Desktop running (uses the careerpath-db container's pg_dump).
 
 param(
     [switch]$Restore,
@@ -21,10 +21,10 @@ param(
 $ErrorActionPreference = "Stop"
 $BackupDir = Join-Path $PSScriptRoot "backups"
 
-# find the supabase db container (compose names it supabase-db)
-$dbContainer = (docker ps --format "{{.Names}}" | Select-String -Pattern "supabase-db" | Select-Object -First 1)
+# find our db container (compose names it careerpath-db)
+$dbContainer = (docker ps --format "{{.Names}}" | Select-String -Pattern "^careerpath-db" | Select-Object -First 1)
 if (-not $dbContainer) {
-    Write-Host "ERROR: supabase-db container not running. Start the stack first (server\start-all.ps1)." -ForegroundColor Red
+    Write-Host "ERROR: careerpath-db container not running. Start the stack first (server\start-all.ps1)." -ForegroundColor Red
     exit 1
 }
 $dbContainer = $dbContainer.ToString().Trim()

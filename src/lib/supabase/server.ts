@@ -3,12 +3,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database";
+import { supabaseUrlForServer } from "./url";
 
 export async function createClient() {
     const cookieStore = await cookies();
 
     return createServerClient<Database>(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        supabaseUrlForServer(),
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
             cookies: {
@@ -33,7 +34,7 @@ export async function createClient() {
 // For API routes where we don't have cookies context
 export function createServiceClient() {
     return createServerClient<Database>(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        supabaseUrlForServer(),
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
             cookies: {

@@ -19,7 +19,7 @@ if (-not (Test-Path $envFile)) {
 $url = (Get-Content $envFile | Select-String -Pattern "^SITE_URL=(.+)$").Matches[0].Groups[1].Value.Trim()
 $anon = (Get-Content $envFile | Select-String -Pattern "^ANON_KEY=(.+)$").Matches[0].Groups[1].Value.Trim()
 
-$apiBase = "http://localhost:8000/auth/v1"
+$apiBase = "http://localhost:54321/auth/v1"
 $headers = @{ apikey = $anon; "Content-Type" = "application/json" }
 
 $DemoPassword = "Demo@2026!"
@@ -66,7 +66,7 @@ foreach ($a in $accounts) {
         } | ConvertTo-Json
         try {
             Invoke-RestMethod -Method Patch `
-                -Uri "http://localhost:8000/rest/v1/profiles?id=eq.$uid" `
+                -Uri "http://localhost:54321/rest/v1/profiles?id=eq.$uid" `
                 -Headers ($headers + @{ Authorization = "Bearer $($resp.access_token)"; Prefer = "return=minimal" }) `
                 -Body $profileBody | Out-Null
         } catch {

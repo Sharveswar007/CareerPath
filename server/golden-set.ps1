@@ -8,13 +8,13 @@
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File server\golden-set.ps1
-#   powershell -ExecutionPolicy Bypass -File server\golden-set.ps1 -BaseUrl "http://localhost:8000/v1" -MinScore 80
+#   powershell -ExecutionPolicy Bypass -File server\golden-set.ps1 -BaseUrl "http://localhost:8001/v1" -MinScore 80
 #
 # Note: measures JSON validity + required structure only. Spot-check a few
 # answers manually for factual quality (no script can grade truth).
 
 param(
-    [string]$BaseUrl = "http://localhost:8000/v1",
+    [string]$BaseUrl = "http://localhost:8001/v1",
     [string]$ApiKey  = "",
     [string]$Model   = "careerpath-ai",
     [double]$MinScore = 80,

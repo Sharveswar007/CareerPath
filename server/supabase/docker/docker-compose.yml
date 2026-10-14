@@ -8,12 +8,12 @@
 #   - Nested variable interpolation (${A:-${B}}) requires podman-compose >= 1.6.0
 #
 
-name: supabase
+name: careerpath-supabase
 
 services:
 
   studio:
-    container_name: supabase-studio
+    container_name: careerpath-studio
     image: supabase/studio:2026.09.07-sha-7996410
     restart: unless-stopped
     healthcheck:
@@ -68,7 +68,7 @@ services:
   # Envoy is the default API gateway
   # See: https://github.com/orgs/supabase/discussions/48048
   api-gw:
-    container_name: supabase-envoy
+    container_name: careerpath-envoy
     image: envoyproxy/envoy:v1.39.1
     restart: unless-stopped
     networks:
@@ -107,7 +107,7 @@ services:
     entrypoint: ["/bin/sh", "/docker-entrypoint.sh"]
 
   auth:
-    container_name: supabase-auth
+    container_name: careerpath-auth
     image: supabase/gotrue:v2.196.0
     restart: unless-stopped
     healthcheck:
@@ -247,7 +247,7 @@ services:
       # GOTRUE_HOOK_SEND_EMAIL_SECRETS: "v1,whsec_VGhpcyBpcyBhbiBleGFtcGxlIG9mIGEgc2hvcnRlciBCYXNlNjQgc3RyaW5n"
 
   rest:
-    container_name: supabase-rest
+    container_name: careerpath-rest
     image: postgrest/postgrest:v14.17
     restart: unless-stopped
     depends_on:
@@ -283,7 +283,7 @@ services:
 
   realtime:
     # This container name looks inconsistent but is correct because realtime constructs tenant id by parsing the subdomain
-    container_name: realtime-dev.supabase-realtime
+    container_name: careerpath-realtime
     image: supabase/realtime:v2.134.10
     restart: unless-stopped
     depends_on:
@@ -329,7 +329,7 @@ services:
 
   # To use S3 backed storage: docker compose -f docker-compose.yml -f docker-compose.s3.yml up
   storage:
-    container_name: supabase-storage
+    container_name: careerpath-storage
     image: supabase/storage-api:v1.74.0
     restart: unless-stopped
     depends_on:
@@ -392,7 +392,7 @@ services:
       - ./volumes/storage:/var/lib/storage:z
 
   imgproxy:
-    container_name: supabase-imgproxy
+    container_name: careerpath-imgproxy
     image: darthsim/imgproxy:v3.31.4
     restart: unless-stopped
     volumes:
@@ -415,7 +415,7 @@ services:
       IMGPROXY_MAX_SRC_RESOLUTION: 16.8
 
   meta:
-    container_name: supabase-meta
+    container_name: careerpath-meta
     image: supabase/postgres-meta:v0.99.0
     restart: unless-stopped
     depends_on:
@@ -432,7 +432,7 @@ services:
       CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
 
   functions:
-    container_name: supabase-edge-functions
+    container_name: careerpath-edge-functions
     image: supabase/edge-runtime:v1.76.2
     restart: unless-stopped
     volumes:
@@ -473,7 +473,7 @@ services:
 
   # Comment out everything below this point if you are using an external Postgres database
   db:
-    container_name: supabase-db
+    container_name: careerpath-db
     # To upgrade an existing Postgres 15 database in place, see utils/upgrade-pg17.sh.
     image: supabase/postgres:17.6.1.136
     restart: unless-stopped
@@ -528,7 +528,7 @@ services:
 
   # Update the DATABASE_URL if you are using an external Postgres database
   supavisor:
-    container_name: supabase-pooler
+    container_name: careerpath-pooler
     image: supabase/supavisor:2.9.12
     restart: unless-stopped
     ports:

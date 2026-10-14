@@ -2,6 +2,7 @@
 // Returns 200 when all critical deps respond, 502 when something is down.
 
 import { NextResponse } from "next/server";
+import { supabaseUrlForServer } from "@/lib/supabase/url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 async function checkSupabase(): Promise<DepCheck> {
     const start = Date.now();
     try {
-        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const url = supabaseUrlForServer();
         const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
         if (!url || !key) return { ok: false, detail: "env vars missing", ms: Date.now() - start };
         const res = await withTimeout(

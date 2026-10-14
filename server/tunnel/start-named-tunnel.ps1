@@ -10,7 +10,7 @@
 #      Create tunnel -> "Cloudflared" -> name it careerpath
 #   3. In the tunnel's "Public Hostname" tab add the 3 routes:
 #        vllm.yourdomain.com     -> http://localhost:8001
-#        supabase.yourdomain.com -> http://localhost:8000
+#        supabase.yourdomain.com -> http://localhost:54321
 #        judge0.yourdomain.com   -> http://localhost:2358
 #      (adjust hostnames to your domain; ports already match this stack)
 #   4. Copy the tunnel token (starts with eyJ...)

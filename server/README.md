@@ -98,7 +98,7 @@ docker compose up -d
 First run pulls ~10 images (3-6 min). Studio login: see DASHBOARD_USERNAME /
 DASHBOARD_PASSWORD in `supabase\docker\.env`.
 
-Then open http://localhost:8000 (Studio), SQL Editor, paste your repo's
+Then open http://localhost:54321 (Studio), SQL Editor, paste your repo's
 `supabase/schema.sql`, Run.
 
 Note: email confirmation is disabled ON PURPOSE (`ENABLE_EMAIL_AUTOCONFIRM=true`)

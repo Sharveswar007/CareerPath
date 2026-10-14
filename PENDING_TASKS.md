@@ -37,7 +37,7 @@ scripts, dead-dependency removal, 21 unit tests, all 11 route tests.
    ```
    (13B default; `-SkipTunnel` starts faster without public URLs. For a
    quicker first test: `-Model "Qwen/Qwen2.5-Coder-7B-Instruct-AWQ"`.)
-3. Schema: Studio (localhost:8000) → SQL Editor → paste `supabase/schema.sql`
+3. Schema: Studio (localhost:54321) → SQL Editor → paste `supabase/schema.sql`
    → Run. (Idempotent — safe to re-run; seed challenges appear automatically.)
 4. `get-tunnel-urls.ps1` → paste the block from `server/README.md` Step 6
    into Vercel env vars (now includes `SUPABASE_SERVICE_ROLE_KEY`) → Redeploy.

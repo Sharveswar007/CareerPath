@@ -70,7 +70,7 @@ When it finishes, it prints "Done. Next steps".
 
 ### Step 4 — Create the database tables (~5 min)
 
-1. In the server browser open: **http://localhost:8000** (Supabase Studio).
+1. In the server browser open: **http://localhost:54321** (Supabase Studio port, set by `API_GW_HTTP_PORT`).
    - Login: see `server/supabase/docker/.env` → `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD`.
 2. Left menu → **SQL Editor** → **New query**.
 3. Open `C:\CareerPath\supabase\schema.sql` in Notepad, **Select All → Copy** → paste into the SQL editor → **Run**.
@@ -236,7 +236,7 @@ One-time, ~30 min, ~₹500/yr:
 3. In the tunnel's **Public Hostname** tab, add 3 routes:
    ```
    vllm.yourdomain.com     ->  http://localhost:8001
-   supabase.yourdomain.com ->  http://localhost:8000
+   supabase.yourdomain.com ->  http://localhost:54321
    judge0.yourdomain.com   ->  http://localhost:2358
    ```
 4. Copy the tunnel **token** (starts with `eyJ`). On the server:
@@ -294,7 +294,7 @@ checks Supabase + AI + Judge0 with timeouts.
 # FIRST TIME (once)
 git clone https://github.com/Sharveswar007/CareerPath.git ; cd CareerPath
 powershell -ExecutionPolicy Bypass -File server\start-all.ps1
-# Studio localhost:8000 -> SQL -> paste supabase/schema.sql -> Run
+# Studio localhost:54321 -> SQL -> paste supabase/schema.sql -> Run
 # get-tunnel-urls.ps1 -> Vercel env -> Redeploy  (server/README.md Step 6)
 server\smoke-test.ps1 ; server\golden-set.ps1 ; server\load-test.ps1 -Users 65
 server\create-demo-accounts.ps1

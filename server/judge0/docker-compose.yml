@@ -5,8 +5,11 @@ x-logging:
     options:
       max-size: 100M
 
+name: careerpath-judge0
+
 services:
   server:
+    container_name: careerpath-judge0
     image: judge0/judge0:latest
     volumes:
       - ./judge0.conf:/judge0.conf:ro
@@ -17,6 +20,7 @@ services:
     restart: always
 
   worker:
+    container_name: careerpath-judge0-worker
     image: judge0/judge0:latest
     command: ["./scripts/workers"]
     volumes:
@@ -26,6 +30,7 @@ services:
     restart: always
 
   db:
+    container_name: careerpath-judge0-db
     image: postgres:16.2
     env_file: judge0.conf
     volumes:
@@ -34,6 +39,7 @@ services:
     restart: always
 
   redis:
+    container_name: careerpath-judge0-redis
     image: redis:7.2.4
     command: [
       "bash", "-c",

@@ -74,7 +74,7 @@ while ((Get-Date) -lt $deadline) {
     # gateway container is 'supabase-kong' in newer supabase compose files,
     # 'supabase-envoy' in the vendored version - accept either
     $supaOk    = ($null -ne ($names | Select-String -Quiet -Pattern "supabase-kong|supabase-envoy"))
-    $judgeOk   = ($null -ne ($names | Select-String -Quiet -Pattern "judge0-server"))
+    $judgeOk   = ($null -ne ($names | Select-String -Quiet -Pattern "careerpath-judge0"))
     $tunnelsOk = $SkipTunnel -or (($names | Select-String -Pattern "cloudflared").Count -ge 3)
     if ($vllmOk -and $supaOk -and $judgeOk -and $tunnelsOk) { $ready = $true; break }
     $elapsed += 10
@@ -95,12 +95,12 @@ if ($SkipVllm) {
     Write-Host "  Waiting for the AI model to finish loading (2-4 min first start of the day)..." -ForegroundColor DarkGray
     $vllmReady = $false
     for ($i = 0; $i -lt 36; $i++) {
-        $r = docker logs vllm 2>&1 | Out-String
+        $r = docker logs careerpath-vllm 2>&1 | Out-String
         if ($r -match "Uvicorn running|Application startup complete") { $vllmReady = $true; break }
         Start-Sleep -Seconds 10
     }
     if ($vllmReady) { Write-Host "  AI model loaded and serving." -ForegroundColor Green }
-    else { Write-Host "  vLLM still loading or something failed - check: docker logs vllm" -ForegroundColor Yellow }
+    else { Write-Host "  vLLM still loading or something failed - check: docker logs careerpath-vllm" -ForegroundColor Yellow }
 }
 
 # ---------- 4. URLs ----------

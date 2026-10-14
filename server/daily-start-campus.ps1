@@ -64,10 +64,10 @@ $deadline = (Get-Date).AddMinutes(6)
 $ready = $false
 $elapsed = 0
 while ((Get-Date) -lt $deadline) {
-    $names   = docker ps --format "{{.Names}}"
-    $vllmOk  = $SkipVllm -or ($null -ne ($names | Select-String -Quiet -Pattern "vllm"))
-    $supaOk  = ($null -ne ($names | Select-String -Quiet -Pattern "supabase-kong|supabase-envoy"))
-    $judgeOk = ($null -ne ($names | Select-String -Quiet -Pattern "judge0-server"))
+    $names      = docker ps --format "{{.Names}}"
+    $vllmOk     = $SkipVllm -or ($null -ne ($names | Select-String -Quiet -Pattern "^careerpath-vllm"))
+    $supaOk     = ($null -ne ($names | Select-String -Quiet -Pattern "^careerpath-envoy"))
+    $judgeOk    = ($null -ne ($names | Select-String -Quiet -Pattern "^careerpath-judge0$"))
     if ($vllmOk -and $supaOk -and $judgeOk) { $ready = $true; break }
     $elapsed += 10
     Write-Host "  ...containers coming up ($elapsed s elapsed)" -ForegroundColor DarkGray
@@ -82,12 +82,12 @@ if (-not $SkipVllm) {
     Write-Host "  Waiting for the AI model to load (2-4 min first start of the day)..." -ForegroundColor DarkGray
     $vllmReady = $false
     for ($i = 0; $i -lt 36; $i++) {
-        $r = docker logs vllm 2>&1 | Out-String
+        $r = docker logs careerpath-vllm 2>&1 | Out-String
         if ($r -match "Uvicorn running|Application startup complete") { $vllmReady = $true; break }
         Start-Sleep -Seconds 10
     }
     if ($vllmReady) { Write-Host "  AI model loaded and serving." -ForegroundColor Green }
-    else { Write-Host "  vLLM still loading or failed - check:  docker logs vllm" -ForegroundColor Yellow }
+    else { Write-Host "  vLLM still loading or failed - check:  docker logs careerpath-vllm" -ForegroundColor Yellow }
 }
 
 # ---------- 4. Next.js app ----------

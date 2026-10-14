@@ -4,22 +4,24 @@
 #
 #   powershell -ExecutionPolicy Bypass -File server\campus-setup.ps1
 #
-# It asks for the server's LAN IP and then fills EVERYTHING that needs it:
+# What it fills:
 #   1. .env.local                      (app config, from the campus template)
-#   2. server\supabase\docker\.env     (Supabase config, from .env.example)
-#   3. prints the 2 firewall rules to click through
+#   2. server\supabase\docker\.env     (Supabase config, secrets + URLs)
+#   3. server\judge0\judge0.conf       (token + internal passwords)
+#   4. prints the firewall rule (needs admin/IT, see SERVER_DEV_README.md)
+#
+# NO LAN IP NEEDED ANYMORE: the browser now talks to Supabase through the app
+# itself (relative /supa URL + next.config rewrites), so the build carries no
+# IP and the college WiFi IP may change any time without breaking anything.
+# Students still just open http://<whatever-the-ip-is>:<app port>.
 #
 # If a private .env.campus.local exists at the repo root (gitignored!), the
 # wizard also rotates every public/demo secret: Judge0 token + passwords,
 # vLLM API key, and a freshly signed Supabase key set (JWT secret + keys).
-#
-# The Supabase .env is NOT in git (it holds secrets), so on a fresh clone it
-# does not exist - this wizard creates it from the provided .env.example.
 
 param(
-    # Optional: non-interactive use (automation, re-runs). When omitted the
-    # wizard asks interactively, as normal.
-    [string]$IpAddress
+    # App port if you changed it with daily-start-campus.ps1 -Port <n>
+    [int]$AppPort = 3000
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,12 +47,10 @@ if (Test-Path $credPath) {
     $usingCred = $true
     Write-Host "  Private credentials found (.env.campus.local) - fresh secrets will be injected." -ForegroundColor Green
 } else {
-    # No cred file: keep template values, but if Judge0 was already rotated
-    # by a previous cred-file run, carry that token over instead of the
-    # placeholder so .env.local and judge0.conf always agree.
+    # No cred file: keep template values (fine for offline LAN use).
     Write-Host "  NOTE: no .env.campus.local found - the public template values will be kept." -ForegroundColor Yellow
-    Write-Host "        Fine for offline LAN use; copy the private credentials file to the repo" -ForegroundColor Yellow
-    Write-Host "        root first if you want the fresh secret set." -ForegroundColor Yellow
+    Write-Host "        Copy the private credentials file to the repo root if you want the" -ForegroundColor Yellow
+    Write-Host "        fresh secret set." -ForegroundColor Yellow
 }
 
 Write-Host ""
@@ -58,34 +58,9 @@ Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host "  CareerPath CAMPUS one-time setup" -ForegroundColor Cyan
 Write-Host "=============================================" -ForegroundColor Cyan
 
-# ---------- detect LAN IP, let user confirm ----------
-$detected = $null
-foreach ($nic in (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue)) {
-    if ($nic.IPAddress -notmatch "^127\.|^169\.254\." -and $nic.InterfaceAlias -notmatch "Loopback|vEthernet|Docker|WSL") {
-        $detected = $nic.IPAddress; break
-    }
-}
-Write-Host ""
-if ($IpAddress) {
-    $lanIp = $IpAddress
-    Write-Host "  Using IP from -IpAddress: $lanIp" -ForegroundColor Green
-} elseif ($detected) {
-    Write-Host "  Detected server LAN IP: $detected" -ForegroundColor Green
-    $answer = Read-Host "  Use this IP? (Enter = yes, or type the correct one)"
-    if ($answer) { $lanIp = $answer } else { $lanIp = $detected }
-} else {
-    Write-Host "  Could not detect a LAN IP automatically." -ForegroundColor Yellow
-    Write-Host "  Run  ipconfig  in another window and look for 'IPv4 Address'." -ForegroundColor Yellow
-    $lanIp = Read-Host "  Type the server's LAN IP (e.g. 192.168.1.50)"
-}
-if (-not $lanIp) { Write-Host "  No IP given - exiting." -ForegroundColor Red; exit 1 }
-Write-Host "`n  Using LAN IP: $lanIp" -ForegroundColor Green
-
-# ---------- 1. Supabase config + keys ----------
+# ---------- 1. Supabase .env (keys first) ----------
 $envLocal  = Join-Path $repoRoot ".env.local"
-# Tracked, secret-free template at server\env.campus.template; a legacy
-# .env.campus at the repo root still takes precedence if someone kept one.
-$envCampus = Join-Path $repoRoot ".env.campus"
+$envCampus = Join-Path $repoRoot ".env.campus"          # legacy location, takes precedence
 if (-not (Test-Path $envCampus)) { $envCampus = Join-Path $root "env.campus.template" }
 $supaDockerEnv = Join-Path $root "supabase\docker\.env"
 $supaExample   = Join-Path $root "supabase\docker\.env.example"
@@ -109,56 +84,66 @@ if ($usingCred) {
     Write-Host "  Supabase secrets set from .env.campus.local (JWT secret + keys + dashboard)." -ForegroundColor Green
 }
 
-$anon  = (Select-String -Path $supaDockerEnv -Pattern "^ANON_KEY=(.+)$").Matches[0].Groups[1].Value
+# Our gateway port (example default 54321) - keep every localhost URL in sync.
+$gwPort = "54321"
+$apiGw = Select-String -Path $supaDockerEnv -Pattern "^API_GW_HTTP_PORT=(\d+)" -ErrorAction SilentlyContinue
+if ($apiGw) { $gwPort = $apiGw.Matches[0].Groups[1].Value }
+
+$anon    = (Select-String -Path $supaDockerEnv -Pattern "^ANON_KEY=(.+)$").Matches[0].Groups[1].Value
 $service = ((Select-String -Path $supaDockerEnv -Pattern "^SERVICE_ROLE_KEY=(.+)$").Line) -replace "^SERVICE_ROLE_KEY=", ""
 
 # Judge0: token + internal passwords from the private credential file
 $judge0Conf = Join-Path $root "judge0\judge0.conf"
 if ($usingCred -and (Test-Path $judge0Conf)) {
     $j0 = Get-Content $judge0Conf -Raw
-    if ($cred["JUDGE0_AUTH_TOKEN"])     { $j0 = $j0 -replace "(?m)^AUTHN_TOKEN=.*",       ("AUTHN_TOKEN=" + $cred["JUDGE0_AUTH_TOKEN"]) }
-    if ($cred["JUDGE0_REDIS_PASSWORD"]) { $j0 = $j0 -replace "(?m)^REDIS_PASSWORD=.*",    ("REDIS_PASSWORD=" + $cred["JUDGE0_REDIS_PASSWORD"]) }
-    if ($cred["JUDGE0_DB_PASSWORD"])    { $j0 = $j0 -replace "(?m)^POSTGRES_PASSWORD=.*", ("POSTGRES_PASSWORD=" + $cred["JUDGE0_DB_PASSWORD"]) }
+    if ($cred["JUDGE0_AUTH_TOKEN"])     { $j0 = $j0 -replace "(?m)^AUTHN_TOKEN=.*$",       ("AUTHN_TOKEN=" + $cred["JUDGE0_AUTH_TOKEN"]) }
+    if ($cred["JUDGE0_REDIS_PASSWORD"]) { $j0 = $j0 -replace "(?m)^REDIS_PASSWORD=.*$",    ("REDIS_PASSWORD=" + $cred["JUDGE0_REDIS_PASSWORD"]) }
+    if ($cred["JUDGE0_DB_PASSWORD"])    { $j0 = $j0 -replace "(?m)^POSTGRES_PASSWORD=.*$", ("POSTGRES_PASSWORD=" + $cred["JUDGE0_DB_PASSWORD"]) }
     $j0 | Set-Content $judge0Conf -NoNewline
     Write-Host "  Judge0 token + passwords set from .env.campus.local." -ForegroundColor Green
 }
 
+# ---------- 2. .env.local ----------
 Copy-Item $envCampus $envLocal -Force
 
-# honor a pre-configured non-default Supabase gateway port (API_GW_HTTP_PORT)
-$envLocalRaw = Get-Content $envLocal -Raw
-$dbPortMatch = $envLocalRaw | Select-String -Pattern "NEXT_PUBLIC_SUPABASE_URL=http://192\.168\.1\.50:(\d+)"
-$dbPort = if ($dbPortMatch) { $dbPortMatch.Matches[0].Groups[1].Value } else { "8000" }
-
-$localNew = ($envLocalRaw) `
-    -replace "NEXT_PUBLIC_SUPABASE_URL=http://192\.168\.1\.50:[0-9]+", "NEXT_PUBLIC_SUPABASE_URL=http://${lanIp}:$dbPort" `
-    -replace "NEXT_PUBLIC_SUPABASE_ANON_KEY=.+", "NEXT_PUBLIC_SUPABASE_ANON_KEY=$anon" `
-    -replace "SUPABASE_SERVICE_ROLE_KEY=.+", "SUPABASE_SERVICE_ROLE_KEY=$service"
-if ($cred["AI_API_KEY"])        { $localNew = $localNew -replace "(?m)^AI_API_KEY=.*",       ("AI_API_KEY=" + $cred["AI_API_KEY"]) }
-if ($cred["JUDGE0_AUTH_TOKEN"]) { $localNew = $localNew -replace "(?m)^JUDGE0_AUTH_TOKEN=.*", ("JUDGE0_AUTH_TOKEN=" + $cred["JUDGE0_AUTH_TOKEN"]) }
+$envNew = Get-Content $envLocal -Raw
+# Keys come from the actual Supabase config (new or rotated), never typed by hand:
+$envNew = $envNew -replace "(?m)^NEXT_PUBLIC_SUPABASE_ANON_KEY=.*$",   ("NEXT_PUBLIC_SUPABASE_ANON_KEY=" + $anon)
+$envNew = $envNew -replace "(?m)^SUPABASE_SERVICE_ROLE_KEY=.*$",       ("SUPABASE_SERVICE_ROLE_KEY=" + $service)
+if ($cred["AI_API_KEY"])        { $envNew = $envNew -replace "(?m)^AI_API_KEY=.*$",       ("AI_API_KEY=" + $cred["AI_API_KEY"]) }
+if ($cred["JUDGE0_AUTH_TOKEN"]) { $envNew = $envNew -replace "(?m)^JUDGE0_AUTH_TOKEN=.*$", ("JUDGE0_AUTH_TOKEN=" + $cred["JUDGE0_AUTH_TOKEN"]) }
 if (-not $usingCred) {
+    # Carry over an already-rotated Judge0 token so .env.local and judge0.conf agree
     $confToken = Select-String -Path $judge0Conf -Pattern "^AUTHN_TOKEN=(.+)$" -ErrorAction SilentlyContinue
     if ($confToken -and $confToken.Matches[0].Groups[1].Value -ne "campus-local-please-rotate-me") {
-        $localNew = $localNew -replace "(?m)^JUDGE0_AUTH_TOKEN=.*", ("JUDGE0_AUTH_TOKEN=" + $confToken.Matches[0].Groups[1].Value)
+        $envNew = $envNew -replace "(?m)^JUDGE0_AUTH_TOKEN=.*$", ("JUDGE0_AUTH_TOKEN=" + $confToken.Matches[0].Groups[1].Value)
     }
 }
-$localNew | Set-Content $envLocal -NoNewline
-Write-Host "`n  [1/3] .env.local written (IP + keys filled)." -ForegroundColor Green
+# keep SUPABASE_INTERNAL_URL in sync with the actual gateway port (54321 default)
+$envNew = $envNew -replace "(?m)^SUPABASE_INTERNAL_URL=.*$", ("SUPABASE_INTERNAL_URL=http://localhost:$gwPort")
+$envNew | Set-Content $envLocal -NoNewline
+Write-Host "`n  [1/3] .env.local written (gateway port $gwPort, keys filled)." -ForegroundColor Green
 
-# ---------- 2. Supabase .env ----------
+# ---------- 3. Supabase URLs ----------
+# localhost on purpose: GoTrue only needs these for redirect/email links, and
+# password login works regardless. No IP is baked into the build.
 (Get-Content $supaDockerEnv) `
-    -replace "^SITE_URL=.*", "SITE_URL=http://${lanIp}:3000" `
-    -replace "^API_EXTERNAL_URL=.*", "API_EXTERNAL_URL=http://${lanIp}:8000/auth/v1" |
+    -replace "^SITE_URL=.*", "SITE_URL=http://localhost:$AppPort" `
+    -replace "^API_EXTERNAL_URL=.*", "API_EXTERNAL_URL=http://localhost:$gwPort/auth/v1" |
     Set-Content $supaDockerEnv
-Write-Host "  [2/3] Supabase .env written (SITE_URL / API_EXTERNAL_URL point at this server)." -ForegroundColor Green
+Write-Host "  [2/3] Supabase .env written (SITE_URL localhost:$AppPort, gateway port $gwPort)." -ForegroundColor Green
 
-# ---------- 3. firewall ----------
-Write-Host "  [3/3] Firewall rules (run these two commands as Administrator, or click through Windows Firewall):" -ForegroundColor Yellow
+# ---------- 4. firewall ----------
+Write-Host "  [3/3] ONE firewall rule is needed (browser -> app port $AppPort) - requires" -ForegroundColor Yellow
+Write-Host "        admin OR ask college IT to open TCP port $AppPort. Everything else" -ForegroundColor Yellow
+Write-Host "        stays on localhost, nothing else is exposed to students." -ForegroundColor Yellow
 Write-Host ""
-Write-Host "    netsh advfirewall firewall add rule name=`"CareerPath Web`" dir=in action=allow protocol=TCP localport=3000" -ForegroundColor White
-Write-Host "    netsh advfirewall firewall add rule name=`"CareerPath DB`" dir=in action=allow protocol=TCP localport=8000" -ForegroundColor White
+Write-Host "    netsh advfirewall firewall add rule name=`"CareerPath Web`" dir=in action=allow protocol=TCP localport=$AppPort" -ForegroundColor White
+Write-Host ""
+Write-Host "  Without admin approval, students on the campus LAN cannot reach the server;" -ForegroundColor Yellow
+Write-Host "  localhost access still works. Also see SERVER_DEV_README.md PART 1.5." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "  Then continue with PART 2 of SERVER_DEV_README.md:" -ForegroundColor Cyan
 Write-Host "    powershell -ExecutionPolicy Bypass -File server\daily-start-campus.ps1 -Build" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Done. Nothing else needs the IP - everything else uses localhost." -ForegroundColor Green
+Write-Host "Done. The IP never appears anywhere - it may change any time." -ForegroundColor Green

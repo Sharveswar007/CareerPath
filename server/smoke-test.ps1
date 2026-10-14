@@ -5,7 +5,7 @@
 param(
     [string]$VllmUrl = "http://localhost:8001",
     [string]$Judge0Url = "http://localhost:2358",
-    [string]$SupabaseUrl = "http://localhost:8000",
+    [string]$SupabaseUrl = "http://localhost:54321",
     [string]$Judge0Token = ""
 )
 

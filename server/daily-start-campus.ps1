@@ -108,8 +108,10 @@ Write-Host "  .env.local found." -ForegroundColor Green
 # the login page, which then dies with the cryptic
 #   "@supabase/ssr: Your project's URL and API key are required to create a Supabase client!"
 $envLines = Get-Content $envFile
-$supaUrl   = ($envLines | Select-String -Pattern "^NEXT_PUBLIC_SUPABASE_URL=(.+)$").Matches[0].Groups[1].Value
-$supaAnon  = ($envLines | Select-String -Pattern "^NEXT_PUBLIC_SUPABASE_ANON_KEY=(.+)$").Matches[0].Groups[1].Value
+$urlMatch  = $envLines | Select-String -Pattern "^NEXT_PUBLIC_SUPABASE_URL=(.+)$"
+$anonMatch = $envLines | Select-String -Pattern "^NEXT_PUBLIC_SUPABASE_ANON_KEY=(.+)$"
+$supaUrl  = if ($urlMatch)  { $urlMatch.Matches[0].Groups[1].Value }  else { $null }
+$supaAnon = if ($anonMatch) { $anonMatch.Matches[0].Groups[1].Value } else { $null }
 if (-not $supaUrl -or $supaUrl -match "PASTE|your-project|your_supabase" -or
     -not $supaAnon -or $supaAnon.Length -lt 40 -or $supaAnon -match "PASTE|your_supabase") {
     Write-Host "  .env.local exists but the Supabase URL/key are MISSING or still placeholders." -ForegroundColor Red

@@ -104,6 +104,21 @@ if (-not (Test-Path $envFile)) {
 Write-Host "  .env.local found." -ForegroundColor Green
 
 # NEXT_PUBLIC_* values are baked in at build time; a stale .next + new IP breaks auth.
+# Also verify they are FILLED - a template copy builds fine until Next prerenders
+# the login page, which then dies with the cryptic
+#   "@supabase/ssr: Your project's URL and API key are required to create a Supabase client!"
+$envLines = Get-Content $envFile
+$supaUrl   = ($envLines | Select-String -Pattern "^NEXT_PUBLIC_SUPABASE_URL=(.+)$").Matches[0].Groups[1].Value
+$supaAnon  = ($envLines | Select-String -Pattern "^NEXT_PUBLIC_SUPABASE_ANON_KEY=(.+)$").Matches[0].Groups[1].Value
+if (-not $supaUrl -or $supaUrl -match "PASTE|your-project|your_supabase" -or
+    -not $supaAnon -or $supaAnon.Length -lt 40 -or $supaAnon -match "PASTE|your_supabase") {
+    Write-Host "  .env.local exists but the Supabase URL/key are MISSING or still placeholders." -ForegroundColor Red
+    Write-Host "  Run the wizard to fill them from server\supabase\docker\.env:" -ForegroundColor Yellow
+    Write-Host "    powershell -ExecutionPolicy Bypass -File server\campus-setup.ps1" -ForegroundColor White
+    Stop-Transcript | Out-Null
+    exit 1
+}
+Write-Host "  .env.local Supabase URL + key look filled (anon key $($supaAnon.Length) chars)." -ForegroundColor Green
 $needsBuild = $Build -or -not (Test-Path (Join-Path $repoRoot ".next"))
 if ($needsBuild) {
     Write-Host "  Building production bundle (npm run build; first time ~3-5 min)..." -ForegroundColor Yellow
